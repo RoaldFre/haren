@@ -40,7 +40,7 @@ data Ray = Ray Point3D Vector
 
 (*.) :: Flt -> (Flt, Flt, Flt)
 	-> (Flt, Flt, Flt)
-a *. (x, y, z) = (a*x, a*y, a*z)
+a *. v = v .* a
 
 len :: Vector -> Flt
 len v = sqrt(v .*. v)
