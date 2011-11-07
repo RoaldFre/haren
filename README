@@ -1,0 +1,14 @@
+Haren (pronounced ha-ren) -- a Haskell Renderer.
+
+This renderer is implemented as an assignment for the Computer Graphics 
+course at the Katholieke Universiteit Leuven.
+It consists of two main parts:
+
+  - haras (pronounced 'harass'):
+    A Haskell Rasterizer
+
+  - haray (pronounced 'hurray'):
+    A Haskell Raytracer
+
+Author: Roald Frederickx
+
