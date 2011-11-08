@@ -6,8 +6,6 @@ data Object = Sphere Flt Point3D
 
 data Ray = Ray {origin::Point3D, direction::UnitVector} deriving Show
 
--- | Intersection distance normal.
--- Normal will be rescaled to a unit vector.
 data Intersection = Intersection {distance::Flt,
         normal::UnitVector} deriving Show
 
