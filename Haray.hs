@@ -1,5 +1,3 @@
-module Math where
-
 -- floating point format, easily switch between Float and Double
 type Flt = Double 
 
@@ -43,5 +41,6 @@ a *. v = v .* a
 
 len :: Vector -> Flt
 len v = sqrt(v .*. v)
+
 
 -- vim: expandtab
