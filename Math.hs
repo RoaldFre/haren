@@ -9,8 +9,7 @@ inf = 1/0 -- It is as if a million mathematicians suddenly cried out in pain
 eps :: Flt
 eps = 1.0e-9 -- Todo: base this on actual machine epsilon
 
-type Point2D = (Flt, Flt)
-type Point3D = (Flt, Flt, Flt)
+type Point = (Flt, Flt, Flt)
 type Vector = (Flt, Flt, Flt)
 type UnitVector = (Flt, Flt, Flt)
 
@@ -23,7 +22,6 @@ e2 = (0, 1, 0)
 e3 :: (Flt, Flt, Flt)
 e3 = (0, 0, 1)
 
--- works for Point3D and Vector
 infixl 6 .+. 
 (.+.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt)
         -> (Flt, Flt, Flt)
@@ -39,6 +37,16 @@ infixl 7 .*.
 (.*.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt)
         -> Flt
 (x1, y1, z1) .*. (x2, y2, z2) = x1*x2 + y1*y2 + z1*z2 
+
+infixl 7 .^.
+-- | Cross product (written as a 'wedge' product here, because .x. is not a 
+-- valid infix operator)
+(.^.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt)
+        -> (Flt, Flt, Flt)
+(x1, y1, z1) .^. (x2, y2, z2) = 
+                                (y1 * z2  -  z1 * y2
+                                ,z1 * x2  -  x1 * z2
+                                ,x1 * y2  -  y1 * x2)
 
 -- | This is a bit of a hack to get a postfix (.^2) operator. It makes 
 -- subsequent code a bit more tidy and symmetric wrt to scalars.
@@ -65,6 +73,9 @@ v ./ a = v .* (1/a)
 
 len :: Vector -> Flt
 len v = sqrt(v .*. v)
+
+normalize :: Vector -> Vector
+normalize v = v ./ (len v)
 
 solveQuadEq :: Flt -> Flt -> Flt -> [Flt]
 solveQuadEq a b c
