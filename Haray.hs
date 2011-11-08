@@ -84,8 +84,27 @@ data Ray = Ray Point3D Vector deriving Show
 -- | Intersection distance normal.
 -- Normal will be rescaled to a unit vector.
 data Intersection = Intersection Flt Vector deriving Show
+intDist :: Intersection -> Flt
+intDist (Intersection dist _) = dist
+
+-- | Note: this ordering only really makes sense for intersections of the same ray.
+instance Ord Intersection where
+        (Intersection d1 _) <= (Intersection d2 _) = d1 <= d2
+-- Prerequisite for Ord...
+instance Eq Intersection where
+        (Intersection d1 _) == (Intersection d2 _) = d1 == d2
 
 
+
+-- | intersectFirstIn (min, max) ray objects. 
+intersectFirstIn :: (Flt, Flt) -> Ray -> [Object] -> Maybe Intersection
+intersectFirstIn (min, max) r objs =
+        case validIntersections of
+                [] -> Nothing
+                _  -> Just (minimum validIntersections)
+        where validIntersections = 
+                [i | i <-  concatMap (intersectWith r) objs,
+                     min <= (intDist i) && (intDist i) <= max]
 
 
 intersectWith :: Ray -> Object -> [Intersection]
