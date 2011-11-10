@@ -3,11 +3,11 @@ module Math where
 -- floating point format, easily switch between Float and Double
 type Flt = Double
 
-inf :: Flt
-inf = 1/0 -- It is as if a million mathematicians suddenly cried out in pain
+infinity :: Flt
+infinity = 1/0 -- It is as if a million mathematicians suddenly cried out in pain
 
-eps :: Flt
-eps = 1.0e-9 -- Todo: base this on actual machine epsilon
+epsilon :: Flt
+epsilon = 1.0e-9 -- Todo: base this on actual machine epsilon
 
 type Point = (Flt, Flt, Flt)
 type Vector = (Flt, Flt, Flt)
