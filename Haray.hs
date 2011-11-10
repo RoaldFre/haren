@@ -42,8 +42,9 @@ data Camera = Camera {
                 camFovy :: Flt -- ^ in degrees
         } deriving Show
 
-newtype Pixel = Pixel (Flt, Flt) deriving Show
+newtype Pixel = Pixel (Int, Int) deriving Show
 newtype Resolution = Resolution (Int, Int) deriving Show
+type Image = Pixel -> Color
 
 type CoordSyst = (UnitVector, UnitVector, UnitVector)
 
@@ -95,23 +96,26 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
                 -- We choose n = 1.
                 nxFlt = fromIntegral ny
                 nyFlt = fromIntegral nx
+                iFlt = fromIntegral i
+                jFlt = fromIntegral j
                 (u, v, w) = cameraSystem cam
                 top = tan ((camFovy cam) * pi / 360) -- theta/2
                 right = top * nxFlt / nyFlt
-                us = right * ((2*i + 1)/nxFlt - 1)
-                vs =  top  * ((2*j + 1)/nyFlt - 1)
+                us = right * ((2*iFlt + 1)/nxFlt - 1)
+                vs =  top  * ((2*jFlt + 1)/nyFlt - 1)
                 dir = normalize $ us*.u .+. vs*.v .-. w -- ws = -n = -1
 
 pixelGrid :: Resolution -> [Pixel]
 pixelGrid (Resolution (nx, ny)) =
-        [Pixel (i, j) | j <- reverse [0 .. (nyFlt - 1)], i <- [0 .. (nxFlt - 1)]]
+        [Pixel (fromIntegral i, fromIntegral j) 
+                | j <- reverse [0 .. (nyFlt - 1)], i <- [0 .. (nxFlt - 1)]]
         where
                 nxFlt = fromIntegral nx
                 nyFlt = fromIntegral ny
 
 pixelRow :: Resolution -> Int -> [Pixel]
 pixelRow (Resolution (nx, ny)) row =
-        [Pixel (i, rowFlt) | i <- [0 .. (nxFlt - 1)]]
+        [Pixel (fromIntegral i, rowFlt) | i <- [0 .. (nxFlt - 1)]]
         where
                 nxFlt = fromIntegral nx
                 rowFlt = fromIntegral row
@@ -163,7 +167,7 @@ renderPPM :: Camera -> [Object] -> Resolution -> String
 renderPPM cam objs res@(Resolution (_, ny)) = 
         headerPPM res ++ "\n" ++ unlines
                 [lineToPPM $ renderLine res cam objs row | row <- reverse [0 .. ny]]
-        
+       
 renderPPMtest =
         writeFile "out.ppm" $ renderPPM cam objs res
         where
@@ -173,5 +177,8 @@ renderPPMtest =
                 mat = [MaterialComponent (1, PureMaterial Diffuse white)]
                 objs = [Object geom1 mat, Object geom2 mat]
                 res = Resolution (200,200)
+
+main :: IO ()
+main = renderPPMtest
 
 -- vim: expandtab smarttab
