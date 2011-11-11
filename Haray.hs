@@ -1,8 +1,9 @@
+ -- TODO: separate types in other file, or make huge explicit export list 
+ -- so we hide internal stuff
+module Haray where
+
 import Math
 import Image
-
---DEBUG, remove imports later on
-import OutputPPM
 
 import Data.List
 import Data.Maybe
