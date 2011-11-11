@@ -10,6 +10,10 @@ import Image
 import Data.List
 import Data.Maybe
 
+data RaytraceConfig = RaytraceConfig {
+        maxIter :: Int
+    } deriving Show
+
 walk :: Ray -> Flt -> Point
 walk ray dist = (rayOrigin ray) .+. (rayDir ray) .* dist
 
@@ -64,25 +68,25 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
 
 
 -- | Calculate the Color of the given Intersection
-color :: Scene -> Intersection -> Color
-color scene int =
+color :: Int -> Scene -> Intersection -> Color
+color depth scene int =
     foldl' addWeightedPureColor black (intMat int)
     where
         addWeightedPureColor col (MaterialComponent (weight, pureMat)) =
-            col .+. weight *. (colorPure int incidentLight pureMat)
+            col .+. weight *. (colorPure depth int incidentLight pureMat)
         incidentLight = incidentDirectLight scene int
 
 -- | Calculate the Color of a PureMaterial under the given light at a given 
 -- Intersection
-colorPure :: Intersection -> [IncidentLight] -> PureMaterial -> Color
-colorPure int incidentLights pureMat@(PureMaterial matType matCol) =
+colorPure :: Int -> Intersection -> [IncidentLight] -> PureMaterial -> Color
+colorPure depth int incidentLights pureMat@(PureMaterial matType matCol) =
     matCol .***. (foldl' (.+.) black $
-                        map (colorMaterialType int matType) incidentLights)
+                        map (colorMaterialType depth int matType) incidentLights)
 
-colorMaterialType :: Intersection -> MaterialType -> IncidentLight -> Color
-colorMaterialType int Diffuse (ilDir, ilCol) =
+colorMaterialType :: Int -> Intersection -> MaterialType -> IncidentLight -> Color
+colorMaterialType _ int Diffuse (ilDir, ilCol) =
     ilCol .* (ilDir .*. (intNorm int))
-colorMaterialType int (Phong p) (ilDir, ilCol) =
+colorMaterialType _ int (Phong p) (ilDir, ilCol) =
     ilCol .* ((h .*. n) ** p)
     where
         n = intNorm int
@@ -93,11 +97,11 @@ colorMaterialType int (Phong p) (ilDir, ilCol) =
 -}
 
 
-colorRay :: Scene -> Ray -> Color
-colorRay scene ray =
+colorRay :: Int -> Scene -> Ray -> Color
+colorRay depth scene ray =
     case (intersectFirst (sObjs scene) ray) of
         Nothing -> black
-        Just int -> color scene int
+        Just int -> color depth scene int
 
 
 -- | Returns the incident light from the scene that's hitting the given 
@@ -144,12 +148,15 @@ attenuation (Directional _) _ = 1
 attenuation _             ray = 1 -- / (rayFar ray)^2
     
 
-raytrace :: Resolution -> Camera -> Scene -> Image
-raytrace res cam scene = Image res map
-    where map = (colorRay scene) . (cameraRay res cam) . (flipHoriz res)
+raytrace :: RaytraceConfig -> Resolution -> Camera -> Scene -> Image
+raytrace conf res cam scene = Image res map
+    where
+        map = (colorRay depth scene) . (cameraRay res cam) . (flipHoriz res)
+        depth = maxIter conf
 
 
-testImage = raytrace res cam scene
+
+testImage = raytrace conf res cam scene
     where
         cam = Camera zero e3 e2 20
         geom1 = Sphere 1.0 (0,0,10)
@@ -162,5 +169,6 @@ testImage = raytrace res cam scene
         res = Resolution (400,400)
         lights = [Light (PointSource (10,0,10)) (white)]
         scene = Scene lights objs
+        conf = RaytraceConfig 5
 
 -- vim: expandtab smarttab sw=4 ts=4

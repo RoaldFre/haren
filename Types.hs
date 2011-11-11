@@ -3,7 +3,11 @@ module Types where
 import Math
 import Image
 
-data MaterialType = Diffuse | Phong Flt deriving Show
+data MaterialType = Diffuse
+		| Phong Flt      -- ^ Phong exponent
+		| Reflecting
+		| Refracting Flt -- ^ index of refraction
+		deriving Show
 data PureMaterial = PureMaterial MaterialType Color deriving Show
 -- | [(weight, pureMaterial)]
 newtype MaterialComponent = MaterialComponent (Flt, PureMaterial) deriving Show
