@@ -1,15 +1,12 @@
 import Math
+import Image
+
+--DEBUG, remove imports later on
+import OutputPPM
 
 import Data.List
+import Data.Maybe
 
-
--- | RGB triplet, components in the range [0..1]. Not a newtype so we can 
--- reuse our triplet math.
-type Color = (Flt, Flt, Flt)
-black :: Color
-black = (0, 0, 0)
-white :: Color
-white = (1, 1, 1)
 
 data MaterialType = Diffuse | Phong Flt deriving Show
 data PureMaterial = PureMaterial MaterialType Color deriving Show
@@ -18,167 +15,199 @@ newtype MaterialComponent = MaterialComponent (Flt, PureMaterial) deriving Show
 type Material = [MaterialComponent]
 
 data Geometry = Sphere Flt Point
-        | Triangle Point Point Point
-                deriving Show
+    | Triangle Point Point Point
+        deriving Show
 
 data Object = Object Geometry Material deriving Show
 
 data Ray = Ray {
-                rayOrigin    :: Point,
-                rayDirection :: UnitVector
-        } deriving Show
+        rayOrigin :: Point,
+        rayDir    :: UnitVector,
+        rayNear   :: Flt, -- ^ near clipping distance
+        rayFar    :: Flt  -- ^ far clipping distance
+    } deriving Show
 
 data Intersection = Intersection {
-                intDist :: Flt,
-                intNorm :: UnitVector,
-                intMat  :: Material -- TODO: don't drag this along all the time?
-        } deriving Show
+        intPos  :: Point,       -- ^ Position of the intersection
+        intDist :: Flt,         -- ^ Distance of intersecting ray
+        intDir  :: UnitVector,  -- ^ Direction of intersecting ray
+        intNorm :: UnitVector,  -- ^ Normal vector of intersection surface
+        intMat  :: Material     -- ^ Material of intersection surface
+    } deriving Show
 
 data Camera = Camera {
-        --TODO: u,v,w instead of pos, dir, up?
-                camPos  :: UnitVector,
-                camDir  :: UnitVector,
-                camUp   :: UnitVector,
-                camFovy :: Flt -- ^ in degrees
-        } deriving Show
-
-newtype Pixel = Pixel (Int, Int) deriving Show
-newtype Resolution = Resolution (Int, Int) deriving Show
-type Image = Pixel -> Color
+    --TODO: u,v,w instead of pos, dir, up?
+        camPos  :: UnitVector,
+        camDir  :: UnitVector,
+        camUp   :: UnitVector,
+        camFovy :: Flt -- ^ in degrees
+    } deriving Show
 
 type CoordSyst = (UnitVector, UnitVector, UnitVector)
+
+data LightType = Directional Vector       -- ^ directional light, no attenuation
+        | PointSource Point               -- ^ Pointsource position
+        | Softbox Point Vector Vector Int -- ^ Softbox origin side1 side2 numRays
+        deriving Show
+
+data Light = Light {
+        lightType  :: LightType,
+        lightColor :: Color
+    } deriving Show
+
+-- | *Inverse* direction and color of lightray incident on a point of a 
+-- surface.
+type IncidentLight = (UnitVector, Color)
+
+data Scene = Scene {
+        sLights :: [Light],
+        sObjs   :: [Object]
+    }
 
 
 -- | Note: this ordering only really makes sense for intersections of the same ray.
 instance Ord Intersection where
-        i1 <= i2  =  intDist i1 <= intDist i2
+    i1 <= i2  =  intDist i1 <= intDist i2
 -- Prerequisite for Ord...
 instance Eq Intersection where
-        i1 == i2  =  intDist i1 == intDist i2
+    i1 == i2  =  intDist i1 == intDist i2
 
+walk :: Ray -> Flt -> Point
+walk ray dist = (rayOrigin ray) .+. (rayDir ray) .* dist
 
--- | intersectFirstIn (min, max) ray objects. 
-intersectFirstIn :: (Flt, Flt) -> Ray -> [Object] -> Maybe Intersection
-intersectFirstIn (min, max) r objs =
-        case validIntersections of
-                [] -> Nothing
-                _  -> Just (minimum validIntersections)
-        where validIntersections = 
-                [i | i <-  concatMap (intersectWith r) objs,
-                     min <= (intDist i) && (intDist i) <= max]
+makeIntersection :: Ray -> Flt -> UnitVector -> Material -> Intersection
+makeIntersection ray dist normal mat = 
+    Intersection (walk ray dist) dist (rayDir ray) normal mat
 
-intersectEpsilonRay = intersectFirstIn (epsilon, infinity)
+intersectFirst :: [Object] -> Ray -> Maybe Intersection
+intersectFirst objs r =
+    case [i | i <-  concatMap (intersectWith r) objs] of
+        [] -> Nothing
+        ints  -> Just (minimum ints)
 
 intersectWith :: Ray -> Object -> [Intersection]
-intersectWith (Ray e d) (Object (Sphere r c) mat) =
-        [Intersection t (sphereNormal t) mat | t <- ts]
-        where
-                ts = solveQuadEq
-                                (d .*. d)
-                                (2 *. d .*. (e .-. c))
-                                ((e .-. c).^2 - r^2)
-                sphereNormal t = (e .+. t*.d .-. c) ./ r
+intersectWith ray@(Ray e d min max) (Object (Sphere r c) mat) =
+    [makeIntersection ray t (sphereNormal t) mat | t <- ts, min < t, t < max]
+    where
+        ts = solveQuadEq
+                (d .*. d)
+                (2 *. d .*. (e .-. c))
+                ((e .-. c).^2 - r^2)
+        sphereNormal t = (e .+. t*.d .-. c) ./ r
 
 
 cameraSystem :: Camera -> CoordSyst
 cameraSystem cam = (u, v, w)
-        where
-                w = (-1) *. (camDir cam)
-                u = normalize $ (camUp cam) .^. w
-                v = w .^. u
+    where
+        w = (-1) *. (camDir cam)
+        u = normalize $ (camUp cam) .^. w
+        v = w .^. u
 
 cameraRay :: Resolution -> Camera -> Pixel -> Ray
 cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
-        Ray (camPos cam) dir
-        where
-                -- See p164 and 203-204 of Fundamentals of Computer 
-                -- Graphics (Peter Shirley, 2nd ed) for drawing and info.
-                -- We choose n = 1.
-                nxFlt = fromIntegral ny
-                nyFlt = fromIntegral nx
-                iFlt = fromIntegral i
-                jFlt = fromIntegral j
-                (u, v, w) = cameraSystem cam
-                top = tan ((camFovy cam) * pi / 360) -- theta/2
-                right = top * nxFlt / nyFlt
-                us = right * ((2*iFlt + 1)/nxFlt - 1)
-                vs =  top  * ((2*jFlt + 1)/nyFlt - 1)
-                dir = normalize $ us*.u .+. vs*.v .-. w -- ws = -n = -1
-
-pixelGrid :: Resolution -> [Pixel]
-pixelGrid (Resolution (nx, ny)) =
-        [Pixel (fromIntegral i, fromIntegral j) 
-                | j <- reverse [0 .. (nyFlt - 1)], i <- [0 .. (nxFlt - 1)]]
-        where
-                nxFlt = fromIntegral nx
-                nyFlt = fromIntegral ny
-
-pixelRow :: Resolution -> Int -> [Pixel]
-pixelRow (Resolution (nx, ny)) row =
-        [Pixel (fromIntegral i, rowFlt) | i <- [0 .. (nxFlt - 1)]]
-        where
-                nxFlt = fromIntegral nx
-                rowFlt = fromIntegral row
-
-pixelRowRays :: Resolution -> Camera -> Int -> [Ray]
-pixelRowRays res cam row =
-        map (cameraRay res cam) (pixelRow res row)
+    Ray (camPos cam) dir 0 infinity
+    where
+        -- See p164 and 203-204 of Fundamentals of Computer 
+        -- Graphics (Peter Shirley, 2nd ed) for drawing and info.
+        -- We choose n = 1.
+        nxFlt = fromIntegral ny
+        nyFlt = fromIntegral nx
+        iFlt = fromIntegral i
+        jFlt = fromIntegral j
+        (u, v, w) = cameraSystem cam
+        top = tan ((camFovy cam) * pi / 360) -- theta/2
+        right = top * nxFlt / nyFlt
+        us = right * ((2*iFlt + 1)/nxFlt - 1)
+        vs =  top  * ((2*jFlt + 1)/nyFlt - 1)
+        dir = normalize $ us*.u .+. vs*.v .-. w -- ws = -n = -1
 
 
--- | Calculate the Color of the Ray intersecting the given Material at the 
--- given Intersection
-color :: Ray -> Intersection -> Color
-color ray int =
-        foldl' addWeightedPureColor black (intMat int)
-        where
-                addWeightedPureColor col (MaterialComponent (weight, pureMat)) =
-                        col .+. weight *. (colorPure ray int pureMat)
+-- | Calculate the Color of the given Intersection
+color :: Scene -> Intersection -> Color
+color scene int =
+    foldl' addWeightedPureColor black (intMat int)
+    where
+        addWeightedPureColor col (MaterialComponent (weight, pureMat)) =
+            col .+. weight *. (colorPure int incidentLight pureMat)
+        incidentLight = incidentDirectLight scene int
 
--- | Calculate the Color of a PureMaterial from a given Ray at a given Intersection
-colorPure :: Ray -> Intersection -> PureMaterial -> Color
-colorPure r i (PureMaterial Diffuse matCol) =
-        ((-1)*.(rayDirection r)) .*. (intNorm i) *. matCol
-        --TODO: proper direction from ray to lightsource
-        --now: light from camera
+-- | Calculate the Color of a PureMaterial under the given light at a given 
+-- Intersection
+colorPure :: Intersection -> [IncidentLight] -> PureMaterial -> Color
+colorPure int incidentLights pureMat =
+    foldl' (.+.) black $ map (colorPure1 int pureMat) incidentLights
+
+colorPure1 :: Intersection -> PureMaterial -> IncidentLight -> Color
+colorPure1 int (PureMaterial Diffuse matCol) (ilDir, ilCol) =
+    (ilDir) .*. (intNorm int) *. ilCol
 
 
-raytrace :: [Object] -> Ray -> Color
-raytrace objs ray =
-        case (intersectEpsilonRay ray objs) of
-                Nothing -> black
-                Just int -> color ray int
+colorRay :: Scene -> Ray -> Color
+colorRay scene ray =
+    case (intersectFirst (sObjs scene) ray) of
+        Nothing -> black
+        Just int -> color scene int
 
-renderLine :: Resolution -> Camera -> [Object] -> Int -> [Color]
-renderLine res cam objs row =
-        map (raytrace objs) (pixelRowRays res cam row)
 
-headerPPM :: Resolution -> String
-headerPPM (Resolution (nx, ny)) = 
-        "P3\n" ++ show nx ++ " " ++ show ny ++ "\n255"
+-- | Returns the incident light from the scene that's hitting the given 
+-- intersection point from the 'correct' side (as determined by the 
+-- normal).
+incidentDirectLight :: Scene  -> Intersection -> [IncidentLight]
+incidentDirectLight scene int =
+    concatMap (incidentDirectLight1 scene int) $ sLights scene
 
-colorToPPM :: Color -> String
-colorToPPM (r, g, b) = component r ++ " " ++ component g ++ " " ++ component b
-        where component = show . round . (* 255) . min 1 . max 0
+-- | Returns the incident light from the given Light that's hitting the 
+-- given intersection point from the 'correct' side (as determined by the 
+-- normal).
+incidentDirectLight1 :: Scene  -> Intersection -> Light -> [IncidentLight]
+incidentDirectLight1 scene int light = 
+    mapMaybe (propagateShadowRay (sObjs scene) light) shadowRays
+    where
+        allRays = spawnShadowRays light (intPos int)
+        shadowRays = filter correctSide allRays
+        correctSide ray = (rayDir ray) .*. (intNorm int) > 0
+    
+-- | Spawn Rays from the given Point to the given light.
+spawnShadowRays :: Light -> Point -> [Ray]
+spawnShadowRays (Light (PointSource lightPos) _) point = [ray]
+    where
+        diff = lightPos .-. point
+        distance = len diff
+        direction = diff ./ distance
+        ray = Ray lightPos direction epsilon distance
+-- TODO: Softbox as concatmap over random pointsources.
 
-lineToPPM :: [Color] -> String
-lineToPPM cols = unwords $ map colorToPPM cols
+-- | Propagate the given ray from the given light through the scene. Return 
+-- the resulting incident light of the lightray, or Nothing if it is 
+-- blocked.
+propagateShadowRay :: [Object] -> Light -> Ray -> Maybe IncidentLight
+propagateShadowRay objs light ray =
+    case intersectFirst objs ray of
+        Just _  -> Nothing
+        Nothing -> Just ((rayDir ray), color)
+    where
+        color = (lightColor light) .* (attenuation (lightType light) ray)
 
-renderPPM :: Camera -> [Object] -> Resolution -> String
-renderPPM cam objs res@(Resolution (_, ny)) = 
-        headerPPM res ++ "\n" ++ unlines
-                [lineToPPM $ renderLine res cam objs row | row <- reverse [0 .. ny]]
-       
-renderPPMtest =
-        writeFile "out.ppm" $ renderPPM cam objs res
-        where
-                cam = Camera zero ((1)*.e3) e2 30
-                geom1 = Sphere 1 (0,0,10)
-                geom2 = Sphere 1 (0,2,20)
-                mat = [MaterialComponent (1, PureMaterial Diffuse white)]
-                objs = [Object geom1 mat, Object geom2 mat]
-                res = Resolution (200,200)
+attenuation :: LightType -> Ray -> Flt
+attenuation (Directional _) _ = 1
+attenuation _             ray = 1 -- / (rayFar ray)^2
+    
 
-main :: IO ()
-main = renderPPMtest
+raytrace :: Resolution -> Camera -> Scene -> Image
+raytrace res cam scene = Image res map
+    where map = (colorRay scene) . (cameraRay res cam) . (flipHoriz res)
 
--- vim: expandtab smarttab
+
+testImage = raytrace res cam scene
+    where
+        cam = Camera zero e3 e2 30
+        geom1 = Sphere 1 (0,0,10)
+        geom2 = Sphere 1 (0,2,20)
+        mat = [MaterialComponent (1, PureMaterial Diffuse white)]
+        objs = [Object geom1 mat, Object geom2 mat]
+        res = Resolution (200,200)
+        lights = [Light (PointSource (0,0,0)) (white)]
+        scene = Scene lights objs
+
+
+-- vim: expandtab smarttab sw=4 ts=4
