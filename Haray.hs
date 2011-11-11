@@ -73,20 +73,20 @@ color depth scene int =
     foldl' addWeightedPureColor black (intMat int)
     where
         addWeightedPureColor col (MaterialComponent (weight, pureMat)) =
-            col .+. weight *. (colorPure depth int incidentLight pureMat)
+            col .+. weight *. (colorPure depth scene int incidentLight pureMat)
         incidentLight = incidentDirectLight scene int
 
 -- | Calculate the Color of a PureMaterial under the given light at a given 
 -- Intersection
-colorPure :: Int -> Intersection -> [IncidentLight] -> PureMaterial -> Color
-colorPure depth int incidentLights pureMat@(PureMaterial matType matCol) =
+colorPure :: Int -> Scene -> Intersection -> [IncidentLight] -> PureMaterial -> Color
+colorPure d s int incidentLights pureMat@(PureMaterial matType matCol) =
     matCol .***. (foldl' (.+.) black $
-                        map (colorMaterialType depth int matType) incidentLights)
+                        map (colorMaterialType d s int matType) incidentLights)
 
-colorMaterialType :: Int -> Intersection -> MaterialType -> IncidentLight -> Color
-colorMaterialType _ int Diffuse (ilDir, ilCol) =
+colorMaterialType :: Int -> Scene -> Intersection -> MaterialType -> IncidentLight -> Color
+colorMaterialType _ _ int Diffuse (ilDir, ilCol) =
     ilCol .* (ilDir .*. (intNorm int))
-colorMaterialType _ int (Phong p) (ilDir, ilCol) =
+colorMaterialType _ _ int (Phong p) (ilDir, ilCol) =
     ilCol .* ((h .*. n) ** p)
     where
         n = intNorm int
@@ -95,6 +95,13 @@ colorMaterialType _ int (Phong p) (ilDir, ilCol) =
     (max 0 ((refl .*. ilDir) ** p)) *. ilCol
     where refl = reflect (intDir int) (intNorm int)
 -}
+colorMaterialType depth scene int Reflecting (ilDir, ilCol) =
+    ilCol .***. colorRay (depth - 1) scene ray
+    where
+        ray = Ray (intPos int) reflectedDir epsilon infinity
+        reflectedDir = reflect (intDir int) (intNorm int)
+    --TODO attenuation?
+
 
 
 colorRay :: Int -> Scene -> Ray -> Color
@@ -155,19 +162,19 @@ raytrace conf res cam scene = Image res map
         depth = maxIter conf
 
 
-
 testImage = raytrace conf res cam scene
     where
-        cam = Camera zero e3 e2 20
-        geom1 = Sphere 1.0 (0,0,10)
-        geom2 = Sphere 1.0 (-1,2,20)
-        geom3 = Sphere 0.4 (0.5,0.5,8)
-        mc1 = MaterialComponent (0.5, PureMaterial Diffuse red)
-        mc2 =  MaterialComponent (0.5, PureMaterial (Phong 10) blue)
-        mat = [mc1, mc2]
+        cam = camLookingAt (0,15,0) (0,0,10) e2 20
+        geom1 = Sphere 1.0 (   0, 0, 10)
+        geom2 = Sphere 1.0 (-1.1, 0, 12)
+        geom3 = Sphere 1.0 ( 1.1, 0, 12)
+        mc1 = MaterialComponent (0.1, PureMaterial Diffuse red)
+        mc2 =  MaterialComponent (1, PureMaterial (Phong 20) blue)
+        mc3 =  MaterialComponent (1, PureMaterial Reflecting white)
+        mat = [mc1, mc2, mc3]
         objs = [Object geom1 mat, Object geom2 mat, Object geom3 mat]
-        res = Resolution (400,400)
-        lights = [Light (PointSource (10,0,10)) (white)]
+        res = Resolution (600, 600)
+        lights = [Light (PointSource (10,10,10)) (white)]
         scene = Scene lights objs
         conf = RaytraceConfig 5
 

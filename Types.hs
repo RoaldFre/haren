@@ -36,11 +36,14 @@ data Intersection = Intersection {
 
 data Camera = Camera {
     --TODO: u,v,w instead of pos, dir, up?
-        camPos  :: UnitVector,
+        camPos  :: Point,
         camDir  :: UnitVector,
         camUp   :: UnitVector,
         camFovy :: Flt -- ^ in degrees
     } deriving Show
+
+camLookingAt :: Point -> Point -> UnitVector -> Flt -> Camera
+camLookingAt pos lookAt up fovy = Camera pos (direction pos lookAt) up fovy
 
 type CoordSyst = (UnitVector, UnitVector, UnitVector)
 
