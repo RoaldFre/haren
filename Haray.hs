@@ -1,6 +1,7 @@
  -- TODO: separate types in other file, or make huge explicit export list 
  -- so we hide internal stuff
-module Haray (raytrace, testImage) where
+module Haray where
+--module Haray (raytrace, testImage, test) where
 
 import Types
 import Math
@@ -114,7 +115,7 @@ spawnShadowRays (Light (PointSource lightPos) _) point = [ray]
         diff = lightPos .-. point
         distance = len diff
         direction = diff ./ distance
-        ray = Ray lightPos direction epsilon distance
+        ray = Ray point direction epsilon distance
 -- TODO: Softbox as concatmap over random pointsources.
 
 -- | Propagate the given ray from the given light through the scene. Return 
@@ -143,12 +144,11 @@ testImage = raytrace res cam scene
         cam = Camera zero e3 e2 20
         geom1 = Sphere 1.0 (0,0,10)
         geom2 = Sphere 1.0 (-1,2,20)
-        geom3 = Sphere 0.4 (0.7,0.7,7)
+        geom3 = Sphere 0.4 (1,1,9)
         mat = [MaterialComponent (1, PureMaterial Diffuse white)]
         objs = [Object geom1 mat, Object geom2 mat, Object geom3 mat]
-        res = Resolution (500,500)
+        res = Resolution (300,300)
         lights = [Light (PointSource (10,10,0)) (white)]
         scene = Scene lights objs
-
 
 -- vim: expandtab smarttab sw=4 ts=4
