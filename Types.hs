@@ -50,8 +50,7 @@ data Light = Light {
         lightColor :: Color
     } deriving Show
 
--- | *Inverse* direction and color of lightray incident on a point of a 
--- surface.
+-- | (direction pointing *to* the lightsource, color of incident light)
 type IncidentLight = (UnitVector, Color)
 
 data Scene = Scene {

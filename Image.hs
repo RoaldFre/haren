@@ -13,6 +13,9 @@ newtype Resolution = Resolution (Int, Int) deriving Show
 type Color = (Flt, Flt, Flt)
 black = (0, 0, 0) :: Color
 white = (1, 1, 1) :: Color
+red   = (1, 0, 0) :: Color
+green = (0, 1, 0) :: Color
+blue  = (0, 0, 1) :: Color
 
 data Image = Image {
         imgRes :: Resolution,

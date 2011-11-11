@@ -23,26 +23,25 @@ e3 :: (Flt, Flt, Flt)
 e3 = (0, 0, 1)
 
 infixl 6 .+. 
-(.+.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt)
-    -> (Flt, Flt, Flt)
+(.+.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt) -> (Flt, Flt, Flt)
 (x1, y1, z1) .+. (x2, y2, z2) = (x1 + x2, y1 + y2, z1 + z2) 
 
-
 infixl 6 .-.
-(.-.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt)
-    -> (Flt, Flt, Flt)
+(.-.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt) -> (Flt, Flt, Flt)
 (x1, y1, z1) .-. (x2, y2, z2) = (x1 - x2, y1 - y2, z1 - z2) 
 
 infixl 7 .*.
-(.*.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt)
-    -> Flt
+(.*.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt) -> Flt
 (x1, y1, z1) .*. (x2, y2, z2) = x1*x2 + y1*y2 + z1*z2 
+
+infixl 7 .***.
+(.***.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt) -> (Flt, Flt, Flt)
+(x1, y1, z1) .***. (x2, y2, z2) = (x1*x2, y1*y2, z1*z2) 
 
 infixl 7 .^.
 -- | Cross product (written as a 'wedge' product here, because .x. is not a 
 -- valid infix operator)
-(.^.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt)
-    -> (Flt, Flt, Flt)
+(.^.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt) -> (Flt, Flt, Flt)
 (x1, y1, z1) .^. (x2, y2, z2) = 
                 (y1 * z2  -  z1 * y2
                 ,z1 * x2  -  x1 * z2
@@ -57,18 +56,15 @@ v .^ 2 = v .*. v
 v .^ _ = error "Can only use .^ on a vector to get the square!"
 
 infixl 7 .*
-(.*) :: (Flt, Flt, Flt) -> Flt
-    -> (Flt, Flt, Flt)
+(.*) :: (Flt, Flt, Flt) -> Flt -> (Flt, Flt, Flt)
 (x, y, z) .* a = (a*x, a*y, a*z)
 
 infixl 7 *.
-(*.) :: Flt -> (Flt, Flt, Flt)
-    -> (Flt, Flt, Flt)
+(*.) :: Flt -> (Flt, Flt, Flt) -> (Flt, Flt, Flt)
 a *. v = v .* a
 
 infixl 7 ./
-(./) :: (Flt, Flt, Flt) -> Flt
-    -> (Flt, Flt, Flt)
+(./) :: (Flt, Flt, Flt) -> Flt -> (Flt, Flt, Flt)
 v ./ a = v .* (1/a)
 
 len :: Vector -> Flt
@@ -88,5 +84,12 @@ solveQuadEq a b c
 direction :: Point -> Point -> UnitVector
 direction p1 p2 = normalize $ p2 .-. p1
 
+-- | Mirror the given vector along the given normal
+mirror :: Vector -> UnitVector -> Vector
+mirror v n = 2*(v .*. n) *. n  .-.  v
+
+-- | Reflect the given vector along the given normal
+reflect :: Vector -> UnitVector -> Vector
+reflect v n = v  .-.  2*(v .*. n) *. n
 
 -- vim: expandtab smarttab sw=4 ts=4

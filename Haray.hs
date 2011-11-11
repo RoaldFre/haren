@@ -75,12 +75,22 @@ color scene int =
 -- | Calculate the Color of a PureMaterial under the given light at a given 
 -- Intersection
 colorPure :: Intersection -> [IncidentLight] -> PureMaterial -> Color
-colorPure int incidentLights pureMat =
-    foldl' (.+.) black $ map (colorPure1 int pureMat) incidentLights
+colorPure int incidentLights pureMat@(PureMaterial matType matCol) =
+    matCol .***. (foldl' (.+.) black $
+                        map (colorMaterialType int matType) incidentLights)
 
-colorPure1 :: Intersection -> PureMaterial -> IncidentLight -> Color
-colorPure1 int (PureMaterial Diffuse matCol) (ilDir, ilCol) =
-    (ilDir) .*. (intNorm int) *. ilCol
+colorMaterialType :: Intersection -> MaterialType -> IncidentLight -> Color
+colorMaterialType int Diffuse (ilDir, ilCol) =
+    ilCol .* (ilDir .*. (intNorm int))
+colorMaterialType int (Phong p) (ilDir, ilCol) =
+    ilCol .* ((h .*. n) ** p)
+    where
+        n = intNorm int
+        h = normalize $ ilDir .-. (intDir int)
+{- Alternative (... with a branch instruction TODO: benchmark):
+    (max 0 ((refl .*. ilDir) ** p)) *. ilCol
+    where refl = reflect (intDir int) (intNorm int)
+-}
 
 
 colorRay :: Scene -> Ray -> Color
@@ -144,11 +154,13 @@ testImage = raytrace res cam scene
         cam = Camera zero e3 e2 20
         geom1 = Sphere 1.0 (0,0,10)
         geom2 = Sphere 1.0 (-1,2,20)
-        geom3 = Sphere 0.4 (1,1,9)
-        mat = [MaterialComponent (1, PureMaterial Diffuse white)]
+        geom3 = Sphere 0.4 (0.5,0.5,8)
+        mc1 = MaterialComponent (0.5, PureMaterial Diffuse red)
+        mc2 =  MaterialComponent (0.5, PureMaterial (Phong 10) blue)
+        mat = [mc1, mc2]
         objs = [Object geom1 mat, Object geom2 mat, Object geom3 mat]
-        res = Resolution (300,300)
-        lights = [Light (PointSource (10,10,0)) (white)]
+        res = Resolution (400,400)
+        lights = [Light (PointSource (10,0,10)) (white)]
         scene = Scene lights objs
 
 -- vim: expandtab smarttab sw=4 ts=4
