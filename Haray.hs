@@ -17,13 +17,16 @@ makeIntersection ray dist normal mat =
     Intersection (walk ray dist) dist (rayDir ray) normal mat
 
 intersectFirst :: [Object] -> Ray -> Maybe Intersection
-intersectFirst objs r =
-    case [i | i <-  concatMap (intersectWith r) objs] of
-        [] -> Nothing
-        ints  -> Just (minimum ints)
+intersectFirst objs ray =
+    case intersectWith ray objs of
+        []   -> Nothing
+        ints -> Just (minimum ints)
 
-intersectWith :: Ray -> Object -> [Intersection]
-intersectWith ray@(Ray e d min max) (Object (Sphere r c) mat) =
+intersectWith :: Ray -> [Object] -> [Intersection]
+intersectWith ray objs = concatMap (intersectWith1 ray) objs
+
+intersectWith1 :: Ray -> Object -> [Intersection]
+intersectWith1 ray@(Ray e d min max) (Object (Sphere r c) mat) =
     [makeIntersection ray t (sphereNormal t) mat | t <- ts, min < t, t < max]
     where
         ts = solveQuadEq
@@ -119,9 +122,9 @@ spawnShadowRays (Light (PointSource lightPos) _) point = [ray]
 -- blocked.
 propagateShadowRay :: [Object] -> Light -> Ray -> Maybe IncidentLight
 propagateShadowRay objs light ray =
-    case intersectFirst objs ray of
-        Just _  -> Nothing
-        Nothing -> Just ((rayDir ray), color)
+    case (intersectWith ray objs) of
+        [] -> Just ((rayDir ray), color)
+        _  -> Nothing
     where
         color = (lightColor light) .* (attenuation (lightType light) ray)
 
@@ -138,12 +141,13 @@ raytrace res cam scene = Image res map
 testImage = raytrace res cam scene
     where
         cam = Camera zero e3 e2 20
-        geom1 = Sphere 1 (0,0,10)
-        geom2 = Sphere 1 (0,2,20)
+        geom1 = Sphere 1.0 (0,0,10)
+        geom2 = Sphere 1.0 (-1,2,20)
+        geom3 = Sphere 0.4 (0.7,0.7,7)
         mat = [MaterialComponent (1, PureMaterial Diffuse white)]
-        objs = [Object geom1 mat, Object geom2 mat]
+        objs = [Object geom1 mat, Object geom2 mat, Object geom3 mat]
         res = Resolution (500,500)
-        lights = [Light (PointSource (0,0,0)) (white)]
+        lights = [Light (PointSource (10,10,0)) (white)]
         scene = Scene lights objs
 
 
