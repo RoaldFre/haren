@@ -2,4 +2,4 @@ import Haray
 import OutputSDL
 import OutputPPM
 
-main = renderSDL testImage
+main = renderSDL (PerLines 2) testImage
