@@ -4,7 +4,7 @@ import Foreign
 import Data.Word
 import Data.List
 import Control.Monad.Reader
-import Graphics.UI.SDL hiding (Pixel, Color)
+import Graphics.UI.SDL as SDL hiding (Pixel, Color)
 import Graphics.UI.SDL.Types
 import System.Exit
 
@@ -24,7 +24,7 @@ renderSDL renderMode image = do
     setCaption "haren" []
     let pixels = [Pixel (i, j) | j <- [0 .. ny - 1], i <- [0 .. nx - 1]]
     let putPixelActions = map (putPixel screen) $ zip pixels (map (imgMap image) pixels)
-    let actions = sprinkle n [Graphics.UI.SDL.flip screen, pollForQuit] putPixelActions
+    let actions = sprinkle n [SDL.flip screen, pollForQuit] putPixelActions
     sequence actions
     quitHandler
     where
