@@ -13,35 +13,37 @@ type Point = (Flt, Flt, Flt)
 type Vector = (Flt, Flt, Flt)
 type UnitVector = (Flt, Flt, Flt)
 
-zero :: (Flt, Flt, Flt)
+type Flt3 = (Flt, Flt, Flt) -- only used for generic functions below
+
+zero :: Flt3
 zero = (0, 0, 0)
-e1 :: (Flt, Flt, Flt)
+e1 :: Flt3
 e1 = (1, 0, 0)
-e2 :: (Flt, Flt, Flt)
+e2 :: Flt3
 e2 = (0, 1, 0)
-e3 :: (Flt, Flt, Flt)
+e3 :: Flt3
 e3 = (0, 0, 1)
 
 infixl 6 .+. 
-(.+.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt) -> (Flt, Flt, Flt)
+(.+.) :: Flt3 -> Flt3 -> Flt3
 (x1, y1, z1) .+. (x2, y2, z2) = (x1 + x2, y1 + y2, z1 + z2) 
 
 infixl 6 .-.
-(.-.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt) -> (Flt, Flt, Flt)
+(.-.) :: Flt3 -> Flt3 -> Flt3
 (x1, y1, z1) .-. (x2, y2, z2) = (x1 - x2, y1 - y2, z1 - z2) 
 
 infixl 7 .*.
-(.*.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt) -> Flt
+(.*.) :: Flt3 -> Flt3 -> Flt
 (x1, y1, z1) .*. (x2, y2, z2) = x1*x2 + y1*y2 + z1*z2 
 
 infixl 7 .***.
-(.***.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt) -> (Flt, Flt, Flt)
+(.***.) :: Flt3 -> Flt3 -> Flt3
 (x1, y1, z1) .***. (x2, y2, z2) = (x1*x2, y1*y2, z1*z2) 
 
 infixl 7 .^.
 -- | Cross product (written as a 'wedge' product here, because .x. is not a 
 -- valid infix operator)
-(.^.) :: (Flt, Flt, Flt) -> (Flt, Flt, Flt) -> (Flt, Flt, Flt)
+(.^.) :: Flt3 -> Flt3 -> Flt3
 (x1, y1, z1) .^. (x2, y2, z2) = 
                 (y1 * z2  -  z1 * y2
                 ,z1 * x2  -  x1 * z2
@@ -51,20 +53,20 @@ infixl 7 .^.
 -- subsequent code a bit more tidy and symmetric wrt to scalars.
 -- TODO: does this present a performance penalty?
 infixr 8 .^
-(.^) :: (Flt, Flt, Flt) -> Int -> Flt
+(.^) :: Flt3 -> Int -> Flt
 v .^ 2 = v .*. v
 v .^ _ = error "Can only use .^ on a vector to get the square!"
 
 infixl 7 .*
-(.*) :: (Flt, Flt, Flt) -> Flt -> (Flt, Flt, Flt)
+(.*) :: Flt3 -> Flt -> Flt3
 (x, y, z) .* a = (a*x, a*y, a*z)
 
 infixl 7 *.
-(*.) :: Flt -> (Flt, Flt, Flt) -> (Flt, Flt, Flt)
+(*.) :: Flt -> Flt3 -> Flt3
 a *. v = v .* a
 
 infixl 7 ./
-(./) :: (Flt, Flt, Flt) -> Flt -> (Flt, Flt, Flt)
+(./) :: Flt3 -> Flt -> Flt3
 v ./ a = v .* (1/a)
 
 len :: Vector -> Flt
