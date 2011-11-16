@@ -3,5 +3,5 @@ import OutputSDL
 import OutputPPM
 
 main = do
-	renderSDL (PerLines 2) testImage
---	renderPPM "out.ppm" testImage
+--	renderSDL (PerLines 2) testImage
+	renderPPM "out.ppm" testImage

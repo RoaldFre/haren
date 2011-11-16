@@ -63,7 +63,7 @@ type IncidentLight = (UnitVector, Color)
 data Scene = Scene {
         sLights :: [Light],
         sObjs   :: [Object]
-    }
+    } deriving Show
 
 -- | Note: this ordering only really makes sense for intersections of the same ray.
 instance Ord Intersection where

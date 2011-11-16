@@ -7,12 +7,25 @@ import Types
 import Math
 import Image
 
-import Data.List
+-- import Data.List
 import Data.Maybe
+
+import Control.Monad.State
+import Control.Applicative
+
+import Prelude hiding (concatMap)
+import Data.Foldable hiding (minimum, concat)
 
 data RaytraceConfig = RaytraceConfig {
         maxIter :: Int
     } deriving Show
+
+data RaytraceState = RaytraceState {
+        rayTrStScene :: Scene,
+        rayTrStDepth :: Int
+    } deriving Show
+
+type RTState a = State RaytraceState a
 
 walk :: Ray -> Flt -> Point
 walk ray dist = (rayOrigin ray) .+. (rayDir ray) .* dist
@@ -68,26 +81,37 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
 
 
 -- | Calculate the Color of the given Intersection
-color :: Int -> Scene -> Intersection -> Color
-color depth scene int =
-    foldl' addWeightedPureColor black (intMat int)
-    where
-        addWeightedPureColor col (MaterialComponent (weight, pureMat)) =
-            col .+. weight *. (colorPure depth scene int incidentLight pureMat)
-        incidentLight = incidentDirectLight scene int
+color :: Intersection -> RTState Color
+color int =
+--TODO STRICT?
+    foldlM (addWeightedPureColor int) black (intMat int)
+
+addWeightedPureColor :: Intersection -> Color -> MaterialComponent -> RTState Color
+addWeightedPureColor int col (MaterialComponent (weight, pureMat)) = do
+    incidentLight <- incidentDirectLight int
+    pureCol <- colorPure int incidentLight pureMat
+    return $ col  .+.  weight *. pureCol
+
 
 -- | Calculate the Color of a PureMaterial under the given light at a given 
 -- Intersection
-colorPure :: Int -> Scene -> Intersection -> [IncidentLight] -> PureMaterial -> Color
-colorPure d s int incidentLights pureMat@(PureMaterial matType matCol) =
-    matCol .***. (foldl' (.+.) black $
-                        map (colorMaterialType d s int matType) incidentLights)
+colorPure :: Intersection -> [IncidentLight] -> PureMaterial -> RTState Color
+colorPure int incidentLights pureMat@(PureMaterial matType matCol) = do
+--TODO: this is messy hack to get it to compile
+    contributions <- mapM (colorMaterialType int matType) incidentLights
+    let total = foldl' (.+.) black contributions
+    return $ matCol .***. total 
 
-colorMaterialType :: Int -> Scene -> Intersection -> MaterialType -> IncidentLight -> Color
-colorMaterialType _ _ int Diffuse (ilDir, ilCol) =
-    ilCol .* (ilDir .*. (intNorm int))
-colorMaterialType _ _ int (Phong p) (ilDir, ilCol) =
-    ilCol .* ((h .*. n) ** p)
+{-
+    return $ matCol .***. (foldl' (.+.) black $
+                        map (colorMaterialType int matType) incidentLights)
+-}
+
+colorMaterialType :: Intersection -> MaterialType -> IncidentLight -> RTState Color
+colorMaterialType int Diffuse (ilDir, ilCol) =
+    return $ ilCol .* (ilDir .*. (intNorm int))
+colorMaterialType int (Phong p) (ilDir, ilCol) =
+    return $ ilCol .* ((h .*. n) ** p)
     where
         n = intNorm int
         h = normalize $ ilDir .-. (intDir int)
@@ -95,8 +119,10 @@ colorMaterialType _ _ int (Phong p) (ilDir, ilCol) =
     (max 0 ((refl .*. ilDir) ** p)) *. ilCol
     where refl = reflect (intDir int) (intNorm int)
 -}
-colorMaterialType depth scene int Reflecting (ilDir, ilCol) =
-    ilCol .***. colorRay (depth - 1) scene ray
+colorMaterialType int Reflecting (ilDir, ilCol) = do
+    -- TODO: NEW STATE!!!!!!! decrement depth!!!
+    -- can be lifted somehow with (ilCol .***.) (colorRay ray)
+    (ilCol .***.) <$> (colorRay ray)
     where
         ray = Ray (intPos int) reflectedDir epsilon infinity
         reflectedDir = reflect (intDir int) (intNorm int)
@@ -104,26 +130,29 @@ colorMaterialType depth scene int Reflecting (ilDir, ilCol) =
 
 
 
-colorRay :: Int -> Scene -> Ray -> Color
-colorRay depth scene ray =
+colorRay :: Ray -> RTState Color
+colorRay ray = do
+    scene <- gets rayTrStScene
     case (intersectFirst (sObjs scene) ray) of
-        Nothing -> black
-        Just int -> color depth scene int
+        Nothing -> return black
+        Just int -> color int
 
 
 -- | Returns the incident light from the scene that's hitting the given 
 -- intersection point from the 'correct' side (as determined by the 
 -- normal).
-incidentDirectLight :: Scene  -> Intersection -> [IncidentLight]
-incidentDirectLight scene int =
-    concatMap (incidentDirectLight1 scene int) $ sLights scene
+incidentDirectLight :: Intersection -> RTState [IncidentLight]
+incidentDirectLight int = do
+    scene <- gets rayTrStScene
+    concat <$> mapM (incidentDirectLight1 int) (sLights scene)
 
 -- | Returns the incident light from the given Light that's hitting the 
 -- given intersection point from the 'correct' side (as determined by the 
 -- normal).
-incidentDirectLight1 :: Scene  -> Intersection -> Light -> [IncidentLight]
-incidentDirectLight1 scene int light = 
-    mapMaybe (propagateShadowRay (sObjs scene) light) shadowRays
+incidentDirectLight1 :: Intersection -> Light -> RTState [IncidentLight]
+incidentDirectLight1 int light = do
+    scene <- gets rayTrStScene
+    return $ mapMaybe (propagateShadowRay (sObjs scene) light) shadowRays
     where
         allRays = spawnShadowRays light (intPos int)
         shadowRays = filter correctSide allRays
@@ -131,12 +160,23 @@ incidentDirectLight1 scene int light =
     
 -- | Spawn Rays from the given Point to the given light.
 spawnShadowRays :: Light -> Point -> [Ray]
-spawnShadowRays (Light (PointSource lightPos) _) point = [ray]
+spawnShadowRays (Light lightType _) point = spawnShadowRaysFromType lightType point
+
+spawnShadowRaysFromType :: LightType -> Point -> [Ray]
+spawnShadowRaysFromType (PointSource lightPos) point = [ray]
     where
         diff = lightPos .-. point
         distance = len diff
         direction = diff ./ distance
         ray = Ray point direction epsilon distance
+{-
+spawnShadowRaysFromType (Softbox lightPos) point =
+    concat [spawnShadowRaysFromType (PointSource pos) point | pos <- positions]
+    where
+        positions = 
+        --| Softbox Point Vector Vector Int -- ^ Softbox origin side1 side2 numRays
+-}
+        
 -- TODO: Softbox as concatmap over random pointsources.
 
 -- | Propagate the given ray from the given light through the scene. Return 
@@ -153,13 +193,22 @@ propagateShadowRay objs light ray =
 attenuation :: LightType -> Ray -> Flt
 attenuation (Directional _) _ = 1
 attenuation _             ray = 1 -- / (rayFar ray)^2
-    
 
+raytrace :: RaytraceConfig -> Resolution -> Camera -> Scene -> Image
+raytrace conf res cam scene = Image res map
+    where
+        map pixel = ((evalState . colorRay) . (cameraRay res cam) . (flipHoriz res)) pixel state
+        depth = maxIter conf
+        state = RaytraceState scene depth
+
+
+{-
 raytrace :: RaytraceConfig -> Resolution -> Camera -> Scene -> Image
 raytrace conf res cam scene = Image res map
     where
         map = (colorRay depth scene) . (cameraRay res cam) . (flipHoriz res)
         depth = maxIter conf
+-}
 
 
 testImage = raytrace conf res cam scene
@@ -169,12 +218,13 @@ testImage = raytrace conf res cam scene
         geom2 = Sphere 1.0 (-1.1, 0, 12)
         geom3 = Sphere 1.0 ( 1.1, 0, 12)
         mc1 = MaterialComponent (0.1, PureMaterial Diffuse red)
-        mc2 =  MaterialComponent (1, PureMaterial (Phong 20) blue)
-        mc3 =  MaterialComponent (1, PureMaterial Reflecting white)
+        mc2 =  MaterialComponent (1, PureMaterial (Phong 50) blue)
+        mc3 =  MaterialComponent (1, PureMaterial Reflecting $ 0.8 *. white)
         mat = [mc1, mc2, mc3]
         objs = [Object geom1 mat, Object geom2 mat, Object geom3 mat]
         res = Resolution (600, 600)
-        lights = [Light (PointSource (10,10,10)) (white)]
+        lights = [Light (PointSource (10,10,10)) (white)
+                 ,Light (PointSource (-10,10,10)) (0.5 *. white)]
         scene = Scene lights objs
         conf = RaytraceConfig 5
 
