@@ -1,7 +1,6 @@
 all: main
 
-OPTS=-O2 -threaded -funbox-strict-fields -rtsopts
-
+OPTS=-O2 -rtsopts -threaded -funbox-strict-fields -fexcess-precision -funfolding-use-threshold=16 -optc-O3 -optc-ffast-math 
 main:
 	ghc ${OPTS} --make Main
 force:
@@ -9,7 +8,7 @@ force:
 
 prof:
 	ghc ${OPTS} --make -fforce-recomp -prof -auto-all -caf-all Main
-	./Main +RTS -p
+	./Main +RTS -p -sstderr
 	less Main.prof
 
 clean:
