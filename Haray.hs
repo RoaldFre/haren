@@ -35,9 +35,7 @@ defaultValue `orRecurseOn` recursion = do
     depth <- gets rayTrStDepth
     if depth <= 0
         then return defaultValue
-        else do
-            modify (\s -> s {rayTrStDepth = depth - 1})
-            recursion
+        else modify (\s -> s {rayTrStDepth = depth - 1}) >> recursion
 
 walk :: Ray -> Flt -> Point
 walk ray dist = (rayOrigin ray) .+. (rayDir ray) .* dist
@@ -95,7 +93,7 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
 -- | Calculate the Color of the given Intersection
 color :: Intersection -> RTState Color
 color int =
---TODO STRICT?
+--TODO STRICT//seq?
     foldlM (addWeightedPureColor int) black (intMat int)
 
 addWeightedPureColor :: Intersection -> Color -> MaterialComponent -> RTState Color
@@ -109,15 +107,10 @@ addWeightedPureColor int col (MaterialComponent (weight, pureMat)) = do
 -- Intersection
 colorPure :: Intersection -> [IncidentLight] -> PureMaterial -> RTState Color
 colorPure int incidentLights pureMat@(PureMaterial matType matCol) = do
---TODO: this is messy hack to get it to compile
     contributions <- mapM (colorMaterialType int matType) incidentLights
     let total = foldl' (.+.) black contributions
     return $ matCol .***. total 
 
-{-
-    return $ matCol .***. (foldl' (.+.) black $
-                        map (colorMaterialType int matType) incidentLights)
--}
 
 colorMaterialType :: Intersection -> MaterialType -> IncidentLight -> RTState Color
 colorMaterialType int Diffuse (ilDir, ilCol) =
@@ -127,17 +120,13 @@ colorMaterialType int (Phong p) (ilDir, ilCol) =
     where
         n = intNorm int
         h = normalize $ ilDir .-. (intDir int)
-{- Alternative (... with a branch instruction TODO: benchmark):
-    (max 0 ((refl .*. ilDir) ** p)) *. ilCol
-    where refl = reflect (intDir int) (intNorm int)
--}
+
 colorMaterialType int Reflecting (ilDir, ilCol) =
     black `orRecurseOn` ((ilCol .***.) <$> (colorRay ray))
     where
         ray = Ray (intPos int) reflectedDir epsilon infinity
         reflectedDir = reflect (intDir int) (intNorm int)
     --TODO attenuation?
-
 
 
 colorRay :: Ray -> RTState Color
@@ -210,15 +199,6 @@ raytrace conf res cam scene = Image res map
         map pixel = ((evalState . colorRay) . (cameraRay res cam) . (flipHoriz res)) pixel state
         depth = maxIter conf
         state = RaytraceState scene depth
-
-
-{-
-raytrace :: RaytraceConfig -> Resolution -> Camera -> Scene -> Image
-raytrace conf res cam scene = Image res map
-    where
-        map = (colorRay depth scene) . (cameraRay res cam) . (flipHoriz res)
-        depth = maxIter conf
--}
 
 
 testImage = raytrace conf res cam scene
