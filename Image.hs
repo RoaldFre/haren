@@ -2,6 +2,9 @@ module Image where
 
 import Math
 
+
+{-
+
 -- TODO: Pick proper convention (0 to res-1) or (1 to res) and check if 
 -- everything complies with this!
 newtype Pixel = Pixel (Int, Int) deriving Show
@@ -19,10 +22,12 @@ blue  = (0, 0, 1) :: Color
 
 data Image = Image {
         imgRes :: Resolution,
-        imgMap :: Pixel -> Color
+        imgMap :: RT (Pixel -> Color)
     }
 
 flipHoriz :: Resolution -> Pixel -> Pixel
 flipHoriz (Resolution (ni, nj)) (Pixel (i, j)) = Pixel (i, nj - j - 1)
+
+-}
 
 -- vim: expandtab smarttab sw=4 ts=4

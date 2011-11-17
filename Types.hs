@@ -1,7 +1,14 @@
 module Types where
 
 import Math
-import Image
+--import Image
+
+
+
+import System.Random
+import Control.Monad.State
+
+
 
 data MaterialType = Diffuse
 		| Phong Flt      -- ^ Phong exponent
@@ -72,3 +79,59 @@ instance Ord Intersection where
 instance Eq Intersection where
     i1 == i2  =  intDist i1 == intDist i2
 
+
+
+
+
+
+
+
+
+
+
+
+
+--TODO: move?
+
+data RaytraceConfig = RaytraceConfig {
+        maxIter :: Int
+    } deriving Show
+
+data RayTraceState = RayTraceState {
+        stateScene  :: Scene,
+        stateDepth  :: Int,
+        stateRndGen :: StdGen -- ^ Random number generator
+    } deriving Show
+
+type RT a = State RayTraceState a
+
+
+
+
+
+
+
+
+
+-- TODO: Pick proper convention (0 to res-1) or (1 to res) and check if 
+-- everything complies with this!
+newtype Pixel = Pixel (Int, Int) deriving Show
+
+newtype Resolution = Resolution (Int, Int) deriving Show
+
+-- | RGB triplet, components in the range [0..1]. Not a newtype so we can 
+-- reuse our triplet math.
+type Color = (Flt, Flt, Flt)
+black = (0, 0, 0) :: Color
+white = (1, 1, 1) :: Color
+red   = (1, 0, 0) :: Color
+green = (0, 1, 0) :: Color
+blue  = (0, 0, 1) :: Color
+
+data Image = Image {
+        imgRes :: Resolution,
+        imgMap :: Pixel -> RT Color
+    }
+
+flipHoriz :: Resolution -> Pixel -> Pixel
+flipHoriz (Resolution (ni, nj)) (Pixel (i, j)) = Pixel (i, nj - j - 1)

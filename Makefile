@@ -1,6 +1,7 @@
 all: main
 
 OPTS=-O2 -rtsopts -threaded -funbox-strict-fields -fexcess-precision -funfolding-use-threshold=16 -optc-O3 -optc-ffast-math 
+
 main:
 	ghc ${OPTS} --make Main
 force:
