@@ -72,7 +72,7 @@ v ./ a = v .* (1/a)
 len :: Vector -> Flt
 len v = sqrt(v .*. v)
 
-normalize :: Vector -> Vector
+normalize :: Vector -> UnitVector
 normalize v = v ./ (len v)
 
 solveQuadEq :: Flt -> Flt -> Flt -> [Flt]
