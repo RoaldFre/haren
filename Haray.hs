@@ -27,6 +27,15 @@ data RaytraceState = RaytraceState {
 
 type RTState a = State RaytraceState a
 
+orRecurseOn :: a -> RTState a -> RTState a
+defaultValue `orRecurseOn` recursion = do
+    depth <- gets rayTrStDepth
+    if depth <= 0
+        then return defaultValue
+        else do
+            modify (\s -> s {rayTrStDepth = depth - 1})
+            recursion
+
 walk :: Ray -> Flt -> Point
 walk ray dist = (rayOrigin ray) .+. (rayDir ray) .* dist
 
@@ -119,10 +128,8 @@ colorMaterialType int (Phong p) (ilDir, ilCol) =
     (max 0 ((refl .*. ilDir) ** p)) *. ilCol
     where refl = reflect (intDir int) (intNorm int)
 -}
-colorMaterialType int Reflecting (ilDir, ilCol) = do
-    -- TODO: NEW STATE!!!!!!! decrement depth!!!
-    -- can be lifted somehow with (ilCol .***.) (colorRay ray)
-    (ilCol .***.) <$> (colorRay ray)
+colorMaterialType int Reflecting (ilDir, ilCol) =
+    black `orRecurseOn` ((ilCol .***.) <$> (colorRay ray))
     where
         ray = Ray (intPos int) reflectedDir epsilon infinity
         reflectedDir = reflect (intDir int) (intNorm int)
@@ -192,7 +199,7 @@ propagateShadowRay objs light ray =
 
 attenuation :: LightType -> Ray -> Flt
 attenuation (Directional _) _ = 1
-attenuation _             ray = 1 -- / (rayFar ray)^2
+attenuation _             ray = 1 -- / (rayFar ray)^2 -- 1/(((rayFar ray) * (rayFar ray)) faster?
 
 raytrace :: RaytraceConfig -> Resolution -> Camera -> Scene -> Image
 raytrace conf res cam scene = Image res map
