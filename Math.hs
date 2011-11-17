@@ -1,7 +1,7 @@
 module Math where
 
 -- floating point format, easily switch between Float and Double
-type Flt = Double
+type Flt = Float
 
 infinity :: Flt
 infinity = 1/0 -- It is as if a million mathematicians suddenly cried out in pain
