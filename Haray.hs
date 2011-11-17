@@ -27,6 +27,9 @@ data RaytraceState = RaytraceState {
 
 type RTState a = State RaytraceState a
 
+-- | Inject the default value into the state if rayTrStDepth is not zero, 
+-- or use the given 'recursion' and apply that on a state with decremented 
+-- depth.
 orRecurseOn :: a -> RTState a -> RTState a
 defaultValue `orRecurseOn` recursion = do
     depth <- gets rayTrStDepth
