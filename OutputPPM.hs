@@ -26,7 +26,7 @@ headerPPM (Resolution (nx, ny)) =
     "P3\n" ++ show nx ++ " " ++ show ny ++ "\n255"
 
 colorToPPM :: Color -> String
-colorToPPM (Flt3 r g b) = component r ++ " " ++ component g ++ " " ++ component b
+colorToPPM (Color r g b) = component r ++ " " ++ component g ++ " " ++ component b
     where component = show . round . (* 255) . min 1 . max 0
 
 

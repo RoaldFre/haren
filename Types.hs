@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances #-}
+
 module Types where
 
 import Math
@@ -91,14 +93,20 @@ newtype Pixel = Pixel (Int, Int) deriving Show
 
 newtype Resolution = Resolution (Int, Int) deriving Show
 
--- | RGB triplet, components in the range [0..1]. Not a newtype so we can 
--- reuse our triplet math.
-type Color = Flt3
-black = zero
-white = Flt3 1 1 1
-red   = e1
-green = e2
-blue  = e3
+-- | Lazy RGB triplet, components in the range [0..1].
+data Color = Color Flt Flt Flt
+
+instance (NumTuple Flt) Color where
+    toList (Color r g b) = [r, g, b]
+    fromList [r, g, b] = Color r g b
+instance Show Color where
+    show = showTuple -- TODO: specify this somehow at the level of NumTuple
+
+black = Color 0 0 0
+white = Color 1 1 1
+red   = Color 1 0 0
+green = Color 0 1 0
+blue  = Color 0 0 1
 
 flipHoriz :: Resolution -> Pixel -> Pixel
 flipHoriz (Resolution (ni, nj)) (Pixel (i, j)) = Pixel (i, nj - j - 1)
