@@ -1,7 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
 
-module Haray where
---module Haray (raytrace, testImage, test) where
+--module Haray where
+module Haray (RayTraceConfig (..), RayTracer, rayTrace) where
 
 import Types
 import Math
