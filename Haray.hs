@@ -108,14 +108,6 @@ intersectWith1 ray@(Ray e d min max) (Object (Sphere r c) mat) =
                 ((e .-. c).^2 - r^2)
         sphereNormal t = (e .+. t*.d .-. c) ./ r
 
-
-cameraSystem :: Camera -> CoordSyst
-cameraSystem cam = (u, v, w)
-    where
-        w = (-1) *. (camDir cam)
-        u = normalize $ (camUp cam) .^. w
-        v = w .^. u
-
 cameraRay :: Resolution -> Camera -> Pixel -> Ray
 cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
     Ray (camPos cam) dir 0 infinity
@@ -127,7 +119,7 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
         nyFlt = fromIntegral nx
         iFlt = fromIntegral i
         jFlt = fromIntegral j
-        (u, v, w) = cameraSystem cam
+        (u, v, w) = camUVW cam
         top = tan ((camFovy cam) * pi / 360) -- theta/2
         right = top * nxFlt / nyFlt
         us = right * ((2*iFlt + 1)/nxFlt - 1)

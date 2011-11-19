@@ -10,12 +10,11 @@ import System.Random
 
 
 data MaterialType = Diffuse
-		| Phong Flt      -- ^ Phong exponent
-		| Reflecting
-		| Refracting Flt -- ^ index of refraction
-		deriving Show
+        | Phong Flt      -- ^ Phong exponent
+        | Reflecting
+        | Refracting Flt -- ^ index of refraction
+        deriving Show
 data PureMaterial = PureMaterial MaterialType Color deriving Show
--- | [(weight, pureMaterial)]
 newtype MaterialComponent = MaterialComponent (Flt, PureMaterial) deriving Show
 type Material = [MaterialComponent]
 
@@ -40,16 +39,30 @@ data Intersection = Intersection {
         intMat  :: Material     -- ^ Material of intersection surface
     } deriving Show
 
-data Camera = Camera {
+data CameraGaze = CameraGaze {
     --TODO: u,v,w instead of pos, dir, up?
-        camPos  :: Point,
-        camDir  :: UnitVector,
-        camUp   :: UnitVector,
-        camFovy :: Flt -- ^ in degrees
+        cgPos  :: Point,
+        cgDir  :: UnitVector,
+        cgUp   :: UnitVector,
+        cgFovy :: Flt -- ^ in degrees
     } deriving Show
 
+data Camera = Camera {
+        camPos  :: Point,
+        camUVW  :: CoordSyst,
+        camFovy :: Flt
+    } deriving Show
+
+camFromCamGaze :: CameraGaze -> Camera
+camFromCamGaze (CameraGaze pos dir up fovy) = Camera pos (u, v, w) fovy
+    where
+        w = (-1) *. dir
+        u = normalize $ up .^. w
+        v = w .^. u
+
 camLookingAt :: Point -> Point -> UnitVector -> Flt -> Camera
-camLookingAt pos lookAt up fovy = Camera pos (direction pos lookAt) up fovy
+camLookingAt pos lookAt up fovy =
+    camFromCamGaze $ CameraGaze pos (direction pos lookAt) up fovy
 
 type CoordSyst = (UnitVector, UnitVector, UnitVector)
 
@@ -115,3 +128,6 @@ blue  = e3
 
 flipHoriz :: Resolution -> Pixel -> Pixel
 flipHoriz (Resolution (ni, nj)) (Pixel (i, j)) = Pixel (i, nj - j - 1)
+
+
+-- vim: expandtab smarttab sw=4 ts=4
