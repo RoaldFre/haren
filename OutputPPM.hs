@@ -2,11 +2,8 @@ module OutputPPM (renderPPM) where
 
 import Renderer
 import Math
-
 import Types
 
-import System.Random
-import Control.Monad.State
 import Control.Applicative
 
 renderPPM :: (Renderer c m) => FilePath -> Scene -> c -> IO ()

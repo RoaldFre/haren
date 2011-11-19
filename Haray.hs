@@ -7,7 +7,6 @@ import Types
 import Math
 import Renderer
 
--- import Data.List
 import Data.Maybe
 import System.Random
 

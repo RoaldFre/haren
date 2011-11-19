@@ -1,12 +1,6 @@
 module Types where
 
 import Math
---import Image
-
-
-
-import System.Random
-
 
 
 data MaterialType = Diffuse
@@ -40,7 +34,6 @@ data Intersection = Intersection {
     } deriving Show
 
 data CameraGaze = CameraGaze {
-    --TODO: u,v,w instead of pos, dir, up?
         cgPos  :: Point,
         cgDir  :: UnitVector,
         cgUp   :: UnitVector,
@@ -50,7 +43,7 @@ data CameraGaze = CameraGaze {
 data Camera = Camera {
         camPos  :: Point,
         camUVW  :: CoordSyst,
-        camFovy :: Flt
+        camFovy :: Flt -- ^ in degrees
     } deriving Show
 
 camFromCamGaze :: CameraGaze -> Camera
@@ -92,24 +85,6 @@ instance Eq Intersection where
     i1 == i2  =  intDist i1 == intDist i2
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 -- TODO: Pick proper convention (0 to res-1) or (1 to res) and check if 
 -- everything complies with this!
 newtype Pixel = Pixel (Int, Int) deriving Show
@@ -125,9 +100,7 @@ red   = e1
 green = e2
 blue  = e3
 
-
 flipHoriz :: Resolution -> Pixel -> Pixel
 flipHoriz (Resolution (ni, nj)) (Pixel (i, j)) = Pixel (i, nj - j - 1)
-
 
 -- vim: expandtab smarttab sw=4 ts=4
