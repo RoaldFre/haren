@@ -113,14 +113,5 @@ green = e2
 blue  = e3
 
 
-{-
- - trying monadic way
- -
-data Image = Image {
-        imgRes :: Resolution,
-        imgMap :: Pixel -> RT Color
-    }
--}
-
 flipHoriz :: Resolution -> Pixel -> Pixel
 flipHoriz (Resolution (ni, nj)) (Pixel (i, j)) = Pixel (i, nj - j - 1)

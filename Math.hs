@@ -18,13 +18,9 @@ data Flt3 = Flt3 !Flt !Flt !Flt -- only used for generic functions below
 instance Show Flt3 where
     show (Flt3 x y z) = show (x, y, z)
 
-zero :: Flt3
 zero = Flt3 0 0 0
-e1 :: Flt3
 e1 = Flt3 1 0 0
-e2 :: Flt3
 e2 = Flt3 0 1 0
-e3 :: Flt3
 e3 = Flt3 0 0 1
 
 infixl 6 .+. 
