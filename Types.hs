@@ -105,12 +105,12 @@ newtype Resolution = Resolution (Int, Int) deriving Show
 
 -- | RGB triplet, components in the range [0..1]. Not a newtype so we can 
 -- reuse our triplet math.
-type Color = (Flt, Flt, Flt)
-black = (0, 0, 0) :: Color
-white = (1, 1, 1) :: Color
-red   = (1, 0, 0) :: Color
-green = (0, 1, 0) :: Color
-blue  = (0, 0, 1) :: Color
+type Color = Flt3
+black = zero
+white = Flt3 1 1 1
+red   = e1
+green = e2
+blue  = e3
 
 
 {-
