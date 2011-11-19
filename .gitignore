@@ -1,6 +1,7 @@
 Main
 Haray
 *.hi
+*.hc
 *.o
 *.ppm
 *.prof

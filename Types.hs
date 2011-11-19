@@ -6,7 +6,6 @@ import Math
 
 
 import System.Random
-import Control.Monad.State
 
 
 
@@ -91,21 +90,6 @@ instance Eq Intersection where
 
 
 
---TODO: move?
-
-data RaytraceConfig = RaytraceConfig {
-        maxIter :: Int
-    } deriving Show
-
-data RayTraceState = RayTraceState {
-        stateScene  :: Scene,
-        stateDepth  :: Int,
-        stateRndGen :: StdGen -- ^ Random number generator
-    } deriving Show
-
-type RT a = State RayTraceState a
-
-
 
 
 
@@ -128,10 +112,15 @@ red   = (1, 0, 0) :: Color
 green = (0, 1, 0) :: Color
 blue  = (0, 0, 1) :: Color
 
+
+{-
+ - trying monadic way
+ -
 data Image = Image {
         imgRes :: Resolution,
         imgMap :: Pixel -> RT Color
     }
+-}
 
 flipHoriz :: Resolution -> Pixel -> Pixel
 flipHoriz (Resolution (ni, nj)) (Pixel (i, j)) = Pixel (i, nj - j - 1)

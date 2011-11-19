@@ -1,9 +1,11 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
+
 module Haray where
 --module Haray (raytrace, testImage, test) where
 
 import Types
 import Math
-import Image
+import Renderer
 
 -- import Data.List
 import Data.Maybe
@@ -15,36 +17,69 @@ import Control.Applicative
 import Prelude hiding (concatMap)
 import Data.Foldable hiding (minimum, concat)
 
+data RayTraceConfig = RayTraceConfig {
+        confDepth :: Int,
+        confSeed  :: Int,
+        confRes   :: Resolution, -- TODO, this and cam are shared with rasterizer, not part of raytracer per se
+        confCam   :: Camera
+    } deriving Show
 
-{-
-newtype RTImage = RTImage (Pixel -> RT Color)
-unwrapRTColor :: (RT Color) -> Color
-unwrapRTColor rtsCol = evalState rtsCol state aaaaaaaaaaargh
--}
+data RayTraceState = RayTraceState {
+        stateScene  :: Scene,
+        stateDepth  :: Int,
+        stateRndGen :: StdGen, -- ^ Random number generator
+        stateRes    :: Resolution,
+        stateCam    :: Camera,
+        stateMaxDepth :: Int
+    } deriving Show
+
+newtype RayTracer a = RT (State RayTraceState a)
+    deriving (Monad, Functor)
+getRes    = RT $ gets stateRes
+getDepth  = RT $ gets stateDepth
+decDepth  = getDepth >>= (\d -> RT $ modify (\s -> s {stateDepth = d - 1}))
+getScene  = RT $ gets stateScene
+getRndGen = RT $ gets stateRndGen
+getCam    = RT $ gets stateCam
+setRndGen new = RT $ modify (\s -> s {stateRndGen = new})
+resetDepth = RT $ gets stateMaxDepth >>= \d -> modify (\s -> s {stateDepth = d})
+
+instance (Renderer RayTraceConfig) RayTracer where
+    colorPixel = rayTrace
+    getResolution = getRes
+    run scene conf (RT s) = evalState s (mkInitialState scene conf)
+
+mkInitialState :: Scene -> RayTraceConfig -> RayTraceState
+mkInitialState scene conf =
+    RayTraceState scene depth rndGen res cam depth
+    where
+        depth = confDepth conf
+        rndGen = mkStdGen $ confSeed conf
+        res = confRes conf
+        cam = confCam conf
 
 
--- | Inject the default value into the state if stateDepth is not zero, 
--- or use the given 'recursion' and apply that on a state with decremented 
--- depth.
-orRecurseOn :: a -> RT a -> RT a
+-- | Return the default value if getDepth is not zero, or use the given 
+-- 'recursion' and apply that after decrementing depth.
+orRecurseOn :: a -> RayTracer a -> RayTracer a
 defaultValue `orRecurseOn` recursion = do
-    depth <- gets stateDepth
+    depth <- getDepth
     if depth <= 0
         then return defaultValue
-        else modify (\s -> s {stateDepth = depth - 1}) >> recursion
+        else decDepth >> recursion
 
-getRandomR :: Random a => (a, a) -> RT a
+getRandomR :: Random a => (a, a) -> RayTracer a
 getRandomR range = do
-    gen <- gets stateRndGen
+    gen <- getRndGen
     let (rand, newGen) = randomR range gen
-    modify (\s -> s {stateRndGen = newGen})
+    setRndGen newGen
     return rand
 
-getRandom :: Random a => RT a
+getRandom :: Random a => RayTracer a
 getRandom = do
-    gen <- gets stateRndGen
+    gen <- getRndGen
     let (rand, newGen) = random gen
-    modify (\s -> s {stateRndGen = newGen})
+    setRndGen newGen
     return rand
 
 walk :: Ray -> Flt -> Point
@@ -101,12 +136,12 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
 
 
 -- | Calculate the Color of the given Intersection
-color :: Intersection -> RT Color
+color :: Intersection -> RayTracer Color
 color int =
 --TODO STRICT//seq?
     foldlM (addWeightedPureColor int) black (intMat int)
 
-addWeightedPureColor :: Intersection -> Color -> MaterialComponent -> RT Color
+addWeightedPureColor :: Intersection -> Color -> MaterialComponent -> RayTracer Color
 addWeightedPureColor int col (MaterialComponent (weight, pureMat)) = do
     incidentLight <- incidentDirectLight int
     pureCol <- colorPure int incidentLight pureMat
@@ -115,14 +150,14 @@ addWeightedPureColor int col (MaterialComponent (weight, pureMat)) = do
 
 -- | Calculate the Color of a PureMaterial under the given light at a given 
 -- Intersection
-colorPure :: Intersection -> [IncidentLight] -> PureMaterial -> RT Color
+colorPure :: Intersection -> [IncidentLight] -> PureMaterial -> RayTracer Color
 colorPure int incidentLights pureMat@(PureMaterial matType matCol) = do
     contributions <- mapM (colorMaterialType int matType) incidentLights
     let total = foldl' (.+.) black contributions
     return $ matCol .***. total 
 
 
-colorMaterialType :: Intersection -> MaterialType -> IncidentLight -> RT Color
+colorMaterialType :: Intersection -> MaterialType -> IncidentLight -> RayTracer Color
 colorMaterialType int Diffuse (ilDir, ilCol) =
     return $ ilCol .* (ilDir .*. (intNorm int))
 colorMaterialType int (Phong p) (ilDir, ilCol) =
@@ -139,43 +174,28 @@ colorMaterialType int Reflecting (ilDir, ilCol) =
     --TODO attenuation?
 
 
-colorRay :: Ray -> RT Color
+colorRay :: Ray -> RayTracer Color
 colorRay ray = do
-    r <- getRandom
-    g <- getRandom
-    b <- getRandom
-
-    (.+. ((r,g,b) .* 1)) <$> color (Intersection (0.1,0.1,9) 9 (0.1,0.1,1) (0.1,0.2,-1) mat)
-        where mat = [MaterialComponent (0.1, PureMaterial Diffuse red)]
-        
-{-
-        intPos  :: Point,       -- ^ Position of the intersection
-        intDist :: Flt,         -- ^ Distance of intersecting ray
-        intDir  :: UnitVector,  -- ^ Direction of intersecting ray
-        intNorm :: UnitVector,  -- ^ Normal vector of intersection surface
-        intMat  :: Material     -- ^ Material of intersection surface
- 
-    scene <- gets stateScene
+    scene <- getScene
     case (intersectFirst (sObjs scene) ray) of
         Nothing -> return black --(r,g,b)
-        Just int -> (.+. ((r,g,b) .* 1)) <$> color int
--}
+        Just int -> color int
 
 
 -- | Returns the incident light from the scene that's hitting the given 
 -- intersection point from the 'correct' side (as determined by the 
 -- normal).
-incidentDirectLight :: Intersection -> RT [IncidentLight]
+incidentDirectLight :: Intersection -> RayTracer [IncidentLight]
 incidentDirectLight int = do
-    scene <- gets stateScene
+    scene <- getScene
     concat <$> mapM (incidentDirectLight1 int) (sLights scene)
 
 -- | Returns the incident light from the given Light that's hitting the 
 -- given intersection point from the 'correct' side (as determined by the 
 -- normal).
-incidentDirectLight1 :: Intersection -> Light -> RT [IncidentLight]
+incidentDirectLight1 :: Intersection -> Light -> RayTracer [IncidentLight]
 incidentDirectLight1 int light = do
-    scene <- gets stateScene
+    scene <- getScene
     return $ mapMaybe (propagateShadowRay (sObjs scene) light) shadowRays
     where
         allRays = spawnShadowRays light (intPos int)
@@ -218,47 +238,13 @@ attenuation :: LightType -> Ray -> Flt
 attenuation (Directional _) _ = 1
 attenuation _             ray = 1 -- / (rayFar ray)^2 -- 1/(((rayFar ray) * (rayFar ray)) faster?
 
-raytrace :: RaytraceConfig -> Resolution -> Camera -> Scene -> Pixel -> RT Color
-raytrace conf res cam scene pixel =
-    colorRay $ (cameraRay res cam) $ (flipHoriz res) pixel
 
-   --     depth = maxIter conf
+rayTrace :: Pixel -> RayTracer Color
+rayTrace pixel = do
+    res <- getRes -- TODO: getResolution from Renderer?
+    cam <- getCam
+    resetDepth
+    (colorRay . (cameraRay res cam) . (flipHoriz res)) pixel
 
-        --state = RayTraceState scene depth (mkStdGen 0)
-
-
-testImage = Image res $ raytrace conf res cam scene
-    where
-        cam = camLookingAt (0,15,0) (0,0,10) e2 20
-        geom1 = Sphere 1.0 (   0, 0, 10)
-        geom2 = Sphere 1.0 (-1.1, 0, 12)
-        geom3 = Sphere 1.0 ( 1.1, 0, 12)
-        mc1 = MaterialComponent (0.1, PureMaterial Diffuse red)
-        mc2 =  MaterialComponent (1, PureMaterial (Phong 50) blue)
-        mc3 =  MaterialComponent (1, PureMaterial Reflecting $ 0.8 *. white)
-        mat = [mc1, mc2, mc3]
-        objs = [Object geom1 mat, Object geom2 mat, Object geom3 mat]
-        res = Resolution (600, 600)
-        lights = [Light (PointSource (10,10,10)) (white)
-                 ,Light (PointSource (-10,10,10)) (0.5 *. white)]
-        scene = Scene lights objs
-        conf = RaytraceConfig 5
-        state = RayTraceState scene 5 (mkStdGen 0)
-
-
-testu :: Flt -> Color
-testu factor = (evalState test2 state) .* factor
-    where state = RayTraceState (Scene [] []) 1 (mkStdGen 0)
-
-
-test :: RT (Double, Double, Double)
-test = do
-    r <- getRandom
-    g <- getRandom
-    b <- getRandom
-    return (r,g,b)
-
-test2 :: RT Color
-test2 = test >> test
 
 -- vim: expandtab smarttab sw=4 ts=4

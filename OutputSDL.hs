@@ -28,15 +28,15 @@ renderSDL renderMode image = do
     sequence actions
     quitHandler
     where
-    	res@(Resolution (nx, ny)) = imgRes image
-	n = chunkSize renderMode res
+        res@(Resolution (nx, ny)) = imgRes image
+    n = chunkSize renderMode res
 
 -- | 'Sprinkle' the first given list at every n'th position in the second 
 -- list, including at the very beginnig and the very end
 sprinkle :: Int -> [a] -> [a] -> [a]
 sprinkle n insertion [] = insertion
 sprinkle n insertion xs = insertion ++ chunk ++ sprinkle n insertion rest
-	where (chunk, rest) = splitAt n xs
+    where (chunk, rest) = splitAt n xs
 
 putPixel :: Surface -> (Pixel, Color) -> IO ()
 putPixel s ((Pixel (x,y)), (r,g,b)) = do

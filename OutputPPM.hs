@@ -1,58 +1,28 @@
 module OutputPPM (renderPPM) where
 
-import Image
+import Renderer
 import Math
 
-import Haray
 import Types
 
 import System.Random
 import Control.Monad.State
 import Control.Applicative
 
-{-
-renderPPM :: FilePath -> Image -> IO ()
-renderPPM fileName = (writeFile fileName) . renderPPMstr
--}
+renderPPM :: (Renderer c m) => FilePath -> Scene -> c -> IO ()
+renderPPM fileName scene conf = writeFile fileName $ run scene conf renderPPMstr
 
-renderPPM :: FilePath -> Image -> IO ()
-renderPPM fileName img = writeFile fileName $ evalState (renderPPMstr img) state
-    where
-        state = RayTraceState (Scene [] []) 5 (mkStdGen 0)
-
-renderPPMstr :: Image -> RT String
-renderPPMstr image = do
-    massiveString <- unlines <$> mapM (renderRow image) [0 .. nx-1]
+renderPPMstr :: (Renderer c m) => m String
+renderPPMstr = do
+    res@(Resolution (nx, _)) <- getResolution
+    massiveString <- unlines <$> mapM renderRow [0 .. nx-1]
     return $ headerPPM res ++ "\n" ++ massiveString
 
-{-
-    headerPPM res ++ "\n" ++ 
-        unlines <$> [
-            unwords <$> [
-                colorToPPM <$> imageMap (Pixel (i,j)) | i <- [0 .. nx-1] ]
-                                                    | j <- [0 .. ny-1] ]
--}
-    where
-        --res@(Resolution (nx, ny)) = imgRes image
-        res@(Resolution (nx, ny)) = Resolution (600,600) ------------------------ TODO
-        imageMap = imgMap image
-        pixelRow i = [Pixel (i,j) | j <- [0 .. ny-1]]
-
-
-
-
-
-renderRow :: Image -> Int -> RT String
-renderRow image row = do
-    colorRow <- mapM imageMap pixelRow
+renderRow :: (Renderer c m) => Int -> m String
+renderRow row = do
+    Resolution (_, ny) <- getResolution
+    colorRow <- mapM colorPixel [Pixel (row, j) | j <- [0 .. ny-1]]
     return $ unwords $ map colorToPPM colorRow
-    where
-        --res@(Resolution (nx, ny)) = imgRes image
-        res@(Resolution (nx, ny)) = Resolution (600,600) ------------------------ TODO
-        imageMap = imgMap image
-        pixelRow = [Pixel (row, j) | j <- [0 .. ny-1]]
-
-
 
 headerPPM :: Resolution -> String
 headerPPM (Resolution (nx, ny)) = 
