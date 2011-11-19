@@ -13,4 +13,4 @@ prof:
 	less Main.prof
 
 clean:
-	rm *hi *o
+	rm -f *hi *hc *o *prof
