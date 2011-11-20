@@ -12,6 +12,8 @@ BACKEND_OPTS=${OPTS_LLVM_AGRESSIVE}
 
 OPTS=-Odph -O2 -rtsopts -threaded -funbox-strict-fields -fexcess-precision -funfolding-use-threshold=1000 -funfolding-creation-threshold=1000 ${BACKEND_OPTS}
 
+OPTS_QUICK=-O2 -rtsopts -threaded -funbox-strict-fields -funfolding-use-threshold=200 
+
 main:
 	ghc ${OPTS} --make Main
 force:
@@ -30,7 +32,7 @@ prof:
 	less Main.prof
 
 test:
-	ghc ${OPTS} --make MathTest.hs
+	ghc ${OPTS_QUICK} --make MathTest.hs
 	./MathTest
 
 clean:

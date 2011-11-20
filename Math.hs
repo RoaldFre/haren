@@ -11,16 +11,14 @@ infinity :: Flt
 infinity = 1/0 -- It is as if a million mathematicians suddenly cried out in pain
 
 epsilon :: Flt
-epsilon = 8 * machine_eps 
+epsilon = radix ** (-digits / 2)
     where
-        machine_eps = radix ** (-digits)
         radix  = fromIntegral $ floatRadix (1 :: Flt)
         digits = fromIntegral $ floatDigits (1 :: Flt)
 
 smallest :: Flt
-smallest = 8 * machine_smallest
+smallest = radix ** (minExp / 2)
     where
-        machine_smallest = radix ** minExp
         radix  = fromIntegral $ floatRadix (1 :: Flt)
         minExp = fromIntegral $ fst $ floatRange (1 :: Flt)
 
@@ -213,7 +211,7 @@ instance (Matrix Flt F3) M3 where
 instance Show M3 where
     show = showMatrix 
 instance Eq M3 where
-    m1 == m2 = (matrToLists m1) == (matrToLists m2)
+    m1 == m2 = (matrToList m1) == (matrToList m2)
 
 m3id = matrFromList [f3e1, f3e2, f3e3]
 
@@ -227,7 +225,7 @@ instance (Matrix Flt F4) M4 where
 instance Show M4 where
     show = showMatrix 
 instance Eq M4 where
-    m1 == m2 = (matrToLists m1) == (matrToLists m2)
+    m1 == m2 = (matrToList m1) == (matrToList m2)
 
 m4id = matrFromList [f4e1, f4e2, f4e3, f4e4]
 
@@ -299,15 +297,15 @@ instance Sub M4 where (.-.) = subm
 instance Sub M3 where (.-.) = subm
 
 
--- | Homogeneous coordinates for a 3D point
+-- | Homogeneous coordinates for a 3D point.
 homP :: Pt3 -> Pt4
 homP (F3 x y z) = F4 x y z 1
 
--- | Homogeneous coordinates for a 3D vector
+-- | Homogeneous coordinates for a 3D vector.
 homV :: Vec3 -> Vec4
 homV (F3 x y z) = F4 x y z 0
 
--- | Translation matrix for the given 3D vector
+-- | Translation matrix for the given 3D vector.
 trans3M4 :: Vec3 -> M4
 trans3M4 = transM4 . homV
 
@@ -328,8 +326,8 @@ rotM4 axis angle =
         w = normalize axis
         -- Make sure we use sufficiently orthogonal axes!
         u = if (w .*. f3e1) < 0.8
-                then w .^. f3e1
-                else w .^. f3e2
+                then normalize $ w .^. f3e1
+                else normalize $ w .^. f3e2
         v = w .^. u
         changeOfBasis = matrFromList [u, v, w]
         rotz = matrFromLists [[c, -s,  0]
@@ -344,6 +342,13 @@ rotM4s :: Vec3 -> Flt -> (M4, M4)
 rotM4s axis angle = (rot, transpose rot)
     where rot = rotM4 axis angle
 
+-- | Translation matrix for the given factor.
+scaleM4 :: Flt -> M4
+scaleM4 = (.*.) m4id
+
+-- | Translation matrices (M, M^-1) for the given factor.
+scaleM4s :: Flt -> (M4, M4)
+scaleM4s x = (scaleM4 x, scaleM4 (1/x))
 
 -- vim: expandtab smarttab sw=4 ts=4
 

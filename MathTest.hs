@@ -22,6 +22,15 @@ transMatrixTests = "transMatrixTests" ~: TestList
 
 rotMatrixTests = "rotMatrixTests" ~: TestList
     [(rotM4 f3e3 90) .*. (f4e1) ~?= f4e2
+    ,(rotM4 f3e3 (-90)) .*. (f4e2) ~?= f4e1
+    ,(rotM4 f3e3 180) .*. (f4e1) ~?= (-1) *. f4e1
+    ,(rotM4 v123 42) .*. (vec4 v123) ~?= vec4 v123
+    ,(rotM4 v123 42) .*. (pt4 v123) ~?= pt4 v123
+    ,(rotM4 v123 42) .*. (rotM4 v123 (-42)) ~?= m4id
+    ,(rotM4 v123 42) .*. (transpose (rotM4 v123 (42))) ~?= m4id
+    ,(transpose (rotM4 v123 (42))) ~?= (rotM4 v123 (-42))
+    ,(rotM4 v123 10) .*. (rotM4 v123 20) ~?= (rotM4 v123 20) .*. (rotM4 v123 10)
+    ,(rotM4 v123 10) .*. (rotM4 v123 20) ~?= rotM4 v123 30
     ]
 
 swap12 = matrFromList [f4e2, f4e1, f4e3, f4e4]
