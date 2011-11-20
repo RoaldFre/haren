@@ -11,7 +11,31 @@ infinity :: Flt
 infinity = 1/0 -- It is as if a million mathematicians suddenly cried out in pain
 
 epsilon :: Flt
-epsilon = 1.0e-4 -- Todo: base this on actual machine epsilon
+epsilon = 8 * machine_eps 
+    where
+        machine_eps = radix ** (-digits)
+        radix  = fromIntegral $ floatRadix (1 :: Flt)
+        digits = fromIntegral $ floatDigits (1 :: Flt)
+
+smallest :: Flt
+smallest = 8 * machine_smallest
+    where
+        machine_smallest = radix ** minExp
+        radix  = fromIntegral $ floatRadix (1 :: Flt)
+        minExp = fromIntegral $ fst $ floatRange (1 :: Flt)
+
+equalsEpsilon :: Flt -> Flt -> Bool
+x1 `equalsEpsilon` x2 = 
+               ((absDiff < smallest)
+            || (x1 == 0  &&  abs2 < epsilon)
+            || (x2 == 0  &&  abs1 < epsilon)
+            || (if abs1 > abs2
+                    then absDiff / abs1 < epsilon
+                    else absDiff / abs2 < epsilon))
+    where
+        abs1 = abs x1
+        abs2 = abs x2
+        absDiff = abs (x2 - x1)
 
 -- | Numerical tuples such as points and vectors in arbitrary dimensions.
 -- WARNING: Compile with optimizations and increase the default 
@@ -48,6 +72,10 @@ class (Num x, Fractional x, Show x) => NumTuple x t | t -> x where
     v .^ 2 = v `dot` v
     v .^ _ = error "Can only use .^ to get the square!"
 
+    equalsWith :: (x -> x -> Bool) -> t -> t -> Bool
+    equalsWith f t1 t2 =
+        List.foldl' (&&) True $ zipWith f (tupleToList t1) (tupleToList t2)
+
     showTuple :: t -> String
     showTuple t = show $ tupleToList t
 
@@ -60,8 +88,8 @@ instance (NumTuple Flt) F4 where
     tupleFromList [x, y, z, w] = F4 x y z w
 instance Show F4 where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
-instance Eq F4 where -- TODO: compare after rescaling both so w-component is 1?
-    t1 == t2 = (tupleToList t1) == (tupleToList t2)
+instance Eq F4 where
+    (==) = equalsWith equalsEpsilon
 
 f4zero = F4 0 0 0 0
 f4e1   = F4 1 0 0 0
@@ -88,7 +116,7 @@ instance (NumTuple Flt) F3 where
 instance Show F3 where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
 instance Eq F3 where
-    t1 == t2 = (tupleToList t1) == (tupleToList t2)
+    (==) = equalsWith equalsEpsilon
     
 
 f3zero = F3 0 0 0
@@ -176,6 +204,20 @@ class (Num x, Fractional x, Show x, Show t, NumTuple x t) =>
     showMatrix m = show $ matrToList m
 
 
+-- | 3x3 Matrix. M3 row1 row2 row3
+data M3 = M3 !F3 !F3 !F3
+
+instance (Matrix Flt F3) M3 where
+    matrToList (M3 r1 r2 r3) = [r1, r2, r3]
+    matrFromList [r1, r2, r3] = M3 r1 r2 r3
+instance Show M3 where
+    show = showMatrix 
+instance Eq M3 where
+    m1 == m2 = (matrToLists m1) == (matrToLists m2)
+
+m3id = matrFromList [f3e1, f3e2, f3e3]
+
+
 -- | 4x4 Matrix. M4 row1 row2 row3 row4
 data M4 = M4 !F4 !F4 !F4 !F4
 
@@ -188,6 +230,11 @@ instance Eq M4 where
     m1 == m2 = (matrToLists m1) == (matrToLists m2)
 
 m4id = matrFromList [f4e1, f4e2, f4e3, f4e4]
+
+-- | Make a (4x4)-matrix in homogeneous coordinates from the given 
+-- (3x3)-matrix
+mat4 :: M3 -> M4
+mat4 (M3 r1 r2 r3) = matrFromList [vec4 r1, vec4 r2, vec4 r3, f4e4]
 
 
 
@@ -205,11 +252,18 @@ instance Mult F4 F4 Flt where (.*.) = dot
 instance Mult F4 Flt F4 where (.*.) = (.*) -- note : .* and *. are often more 
 instance Mult Flt F4 F4 where (.*.) = (*.) -- usefull (verbose) than .*.
 
+instance Mult M3 M3 M3 where (.*.) = mult
+instance Mult M3 F3 F3 where (.*.) = tupleRight
+instance Mult F3 M3 F3 where (.*.) = tupleLeft
+instance Mult M3 Flt M3 where (.*.) = scalemRight
+instance Mult Flt M3 M3 where (.*.) = scalemLeft
+
 instance Mult M4 M4 M4 where (.*.) = mult
 instance Mult M4 F4 F4 where (.*.) = tupleRight
 instance Mult F4 M4 F4 where (.*.) = tupleLeft
 instance Mult M4 Flt M4 where (.*.) = scalemRight
 instance Mult Flt M4 M4 where (.*.) = scalemLeft
+
 
 -- | Used to fully overload the ./. operator to behave as a correct 
 -- scaling.
@@ -219,6 +273,7 @@ class (Num l, Fractional l, Mult x l x) => Div x l where
     x ./. l = x .*. (1/l)
 instance Div F3 Flt
 instance Div F4 Flt
+instance Div M3 Flt
 instance Div M4 Flt
 
 -- | Used to fully overload the .+. operator to behave as a correct sum 
@@ -230,6 +285,7 @@ class Add a where
 instance Add F3 where (.+.) = addt
 instance Add F4 where (.+.) = addt
 instance Add M4 where (.+.) = addm
+instance Add M3 where (.+.) = addm
 
 -- | Used to fully overload the .-. operator to behave as a correct 
 -- difference in all situations.
@@ -240,25 +296,53 @@ class Sub a where
 instance Sub F3 where (.-.) = subt
 instance Sub F4 where (.-.) = subt
 instance Sub M4 where (.-.) = subm
+instance Sub M3 where (.-.) = subm
 
 
--- | Homogeneous coordinates for a point
+-- | Homogeneous coordinates for a 3D point
 homP :: Pt3 -> Pt4
 homP (F3 x y z) = F4 x y z 1
 
--- | Homogeneous coordinates for a vector
+-- | Homogeneous coordinates for a 3D vector
 homV :: Vec3 -> Vec4
 homV (F3 x y z) = F4 x y z 0
 
--- | Translation matrix for the given vector
-trans3M :: Vec3 -> M4
-trans3M = transM . homV
+-- | Translation matrix for the given 3D vector
+trans3M4 :: Vec3 -> M4
+trans3M4 = transM4 . homV
 
--- | Translation matrix for the given vector. *MUST* be a vector (ie last 
--- component == 0) for this to make sense!
-transM :: Vec4 -> M4
-transM v@(F4 x y z 0) = transpose $ matrFromList [f4e1, f4e2, f4e3, v .+. f4e4]
-transM _ = error "Can't translate over a point, only over a vector!"
+-- | Translation matrix for the given vector in homogeneous coordinates.
+transM4 :: Vec4 -> M4
+transM4 v@(F4 x y z 0) = transpose $ matrFromList [f4e1, f4e2, f4e3, v .+. f4e4]
+
+-- | Translation matrix (M, M^-1) for the given vector.
+transM4s :: Vec4 -> (M4, M4)
+transM4s v = (transM4 v, transM4 $ (-1) *. v)
+
+-- | Matrix for rotation along the given (non-zero) axis vector and the 
+-- given angle in degrees.
+rotM4 :: Vec3 -> Flt -> M4
+rotM4 axis angle =
+    mat4 $ (transpose changeOfBasis) .*. rotz .*. changeOfBasis
+    where
+        w = normalize axis
+        -- Make sure we use sufficiently orthogonal axes!
+        u = if (w .*. f3e1) < 0.8
+                then w .^. f3e1
+                else w .^. f3e2
+        v = w .^. u
+        changeOfBasis = matrFromList [u, v, w]
+        rotz = matrFromLists [[c, -s,  0]
+                             ,[s,  c,  0]
+                             ,[0,  0,  1]] :: M3
+        s = sin $ angle * pi / 180
+        c = cos $ angle * pi / 180
+
+-- | Matrices (M, M^-1) for rotation along the given (non-zero) axis vector 
+-- and the given angle in degrees.
+rotM4s :: Vec3 -> Flt -> (M4, M4)
+rotM4s axis angle = (rot, transpose rot)
+    where rot = rotM4 axis angle
 
 
 -- vim: expandtab smarttab sw=4 ts=4

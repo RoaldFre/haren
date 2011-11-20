@@ -3,7 +3,7 @@ import Math
 
 main = runTestTT allTests
 
-allTests = TestList [matrixTests, transfoMatrixTests]
+allTests = TestList [matrixTests, transMatrixTests, rotMatrixTests]
 
 matrixTests = "matrixTests" ~: TestList
     [swap12 .*. swap12 ~?= m4id
@@ -14,10 +14,14 @@ matrixTests = "matrixTests" ~: TestList
     ,nums .*. nums ~?= numsSq
     ]
     
-transfoMatrixTests = "transfoMatrixTests" ~: TestList
-    [(transM (vec4 f3e2)) .*. (pt4 f3e1) ~?= pt4 (f3e1 .+. f3e2)
-    ,(transM (vec4 f3e2)) .*. (pt4 f3e2) ~?= pt4 (2 *. f3e2)
-    ,(transM (vec4 f3e2)) .*. (pt4 v123) ~?= pt4 (v123 .+. f3e2)
+transMatrixTests = "transMatrixTests" ~: TestList
+    [(transM4 (vec4 f3e2)) .*. (pt4 f3e1) ~?= pt4 (f3e1 .+. f3e2)
+    ,(transM4 (vec4 f3e2)) .*. (pt4 f3e2) ~?= pt4 (2 *. f3e2)
+    ,(transM4 (vec4 f3e2)) .*. (pt4 v123) ~?= pt4 (v123 .+. f3e2)
+    ]
+
+rotMatrixTests = "rotMatrixTests" ~: TestList
+    [(rotM4 f3e3 90) .*. (f4e1) ~?= f4e2
     ]
 
 swap12 = matrFromList [f4e2, f4e1, f4e3, f4e4]
