@@ -116,12 +116,20 @@ reflect v n = v  .-.  2*(v .*. n) .*. n
 
 
 
--- | TODO: this can be generalised to arbitrary dimension tensors, which 
--- will fold this and the tuple code above into one tidy package :P
+-- | Type class representing matrices composed of numerical tuples.
+-- Minimum definition: matrToList and matrFromList
+--
+-- TODO: this can be generalised to arbitrary rank tensors, which will 
+-- unify this and the tuple code above into one tidy package :P
 class (Num x, Fractional x, Show x, Show t, NumTuple x t) => 
                         Matrix x t m | t -> x, m -> x, m -> t, t -> m where
     matrToList   :: m -> [t]
     matrFromList :: [t] -> m
+
+    matrToLists   :: m -> [[x]]
+    matrToLists   = (map tupleToList) . matrToList
+    matrFromLists :: [[x]] -> m
+    matrFromLists = matrFromList . (map tupleFromList)
 
     addm :: m -> m -> m
     m1 `addm` m2 = matrFromList $ zipWith addt (matrToList m1) (matrToList m2)
@@ -130,8 +138,7 @@ class (Num x, Fractional x, Show x, Show t, NumTuple x t) =>
     m1 `subm` m2 = matrFromList $ zipWith subt (matrToList m1) (matrToList m2)
 
     transpose :: m -> m
-    transpose m = matrFromList $ map tupleFromList $ List.transpose $
-                                                map tupleToList (matrToList m)
+    transpose m = matrFromLists $ List.transpose $ matrToLists m
 
     mult :: m -> m -> m
     m1 `mult` m2 = matrFromList [
@@ -164,7 +171,10 @@ instance (Matrix Flt F4) M4 where
     matrFromList [r1, r2, r3, r4] = M4 r1 r2 r3 r4
 instance Show M4 where
     show = showMatrix 
+instance Eq M4 where
+    m1 == m2 = (matrToLists m1) == (matrToLists m2)
 
+m4id = matrFromList [f4e1, f4e2, f4e3, f4e4]
 
 
 
@@ -218,6 +228,15 @@ class Sub a where
 instance Sub F3 where (.-.) = subt
 instance Sub F4 where (.-.) = subt
 instance Sub M4 where (.-.) = subm
+
+
+-- | Homogeneous coordinates for a point
+homP :: Point -> F4
+homP (F3 x y z) = F4 x y z 1
+
+-- | Homogeneous coordinates for a vector
+homV :: Vector -> F4
+homV (F3 x y z) = F4 x y z 0
 
 -- vim: expandtab smarttab sw=4 ts=4
 
