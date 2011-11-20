@@ -60,6 +60,8 @@ instance (NumTuple Flt) F4 where
     tupleFromList [x, y, z, w] = F4 x y z w
 instance Show F4 where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
+instance Eq F4 where -- TODO: compare after rescaling both so w-component is 1?
+    t1 == t2 = (tupleToList t1) == (tupleToList t2)
 
 f4zero = F4 0 0 0 0
 f4e1   = F4 1 0 0 0
@@ -67,7 +69,15 @@ f4e2   = F4 0 1 0 0
 f4e3   = F4 0 0 1 0
 f4e4   = F4 0 0 0 1
 
+type Pt4 = F4
+type Vec4 = F4
+type UVec4 = F4 -- ^ Unit Vector
 
+vec4 :: Vec3 -> Vec4
+vec4 (F3 x y z) = F4 x y z 0
+
+pt4 :: Pt3 -> Pt4
+pt4 (F3 x y z) = F4 x y z 1
 
 -- | Numerical tuple with 3 components
 data F3 = F3 !Flt !Flt !Flt
@@ -77,15 +87,18 @@ instance (NumTuple Flt) F3 where
     tupleFromList [x, y, z] = F3 x y z
 instance Show F3 where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
+instance Eq F3 where
+    t1 == t2 = (tupleToList t1) == (tupleToList t2)
+    
 
 f3zero = F3 0 0 0
 f3e1   = F3 1 0 0
 f3e2   = F3 0 1 0
 f3e3   = F3 0 0 1
 
-type Point = F3
-type Vector = F3
-type UnitVector = F3
+type Pt3 = F3
+type Vec3 = F3
+type UVec3 = F3 -- ^ Unit Vector
 
 
 infixl 7 .^.
@@ -97,21 +110,21 @@ infixl 7 .^.
                                     (z1 * x2  -  x1 * z2)
                                     (x1 * y2  -  y1 * x2)
 
-len :: Vector -> Flt
+len :: Vec3 -> Flt
 len v = sqrt(v .*. v)
 
-normalize :: Vector -> UnitVector
+normalize :: Vec3 -> UVec3
 normalize v = v ./. (len v)
 
-direction :: Point -> Point -> UnitVector
+direction :: Pt3 -> Pt3 -> UVec3
 direction p1 p2 = normalize $ p2 .-. p1
 
 -- | Mirror the given vector along the given normal
-mirror :: Vector -> UnitVector -> Vector
+mirror :: Vec3 -> UVec3 -> Vec3
 mirror v n = 2*(v .*. n) .*. n  .-.  v
 
 -- | Reflect the given vector along the given normal
-reflect :: Vector -> UnitVector -> Vector
+reflect :: Vec3 -> UVec3 -> Vec3
 reflect v n = v  .-.  2*(v .*. n) .*. n
 
 
@@ -198,7 +211,6 @@ instance Mult F4 M4 F4 where (.*.) = tupleLeft
 instance Mult M4 Flt M4 where (.*.) = scalemRight
 instance Mult Flt M4 M4 where (.*.) = scalemLeft
 
-
 -- | Used to fully overload the ./. operator to behave as a correct 
 -- scaling.
 class (Num l, Fractional l, Mult x l x) => Div x l where
@@ -231,12 +243,23 @@ instance Sub M4 where (.-.) = subm
 
 
 -- | Homogeneous coordinates for a point
-homP :: Point -> F4
+homP :: Pt3 -> Pt4
 homP (F3 x y z) = F4 x y z 1
 
 -- | Homogeneous coordinates for a vector
-homV :: Vector -> F4
+homV :: Vec3 -> Vec4
 homV (F3 x y z) = F4 x y z 0
+
+-- | Translation matrix for the given vector
+trans3M :: Vec3 -> M4
+trans3M = transM . homV
+
+-- | Translation matrix for the given vector. *MUST* be a vector (ie last 
+-- component == 0) for this to make sense!
+transM :: Vec4 -> M4
+transM v@(F4 x y z 0) = transpose $ matrFromList [f4e1, f4e2, f4e3, v .+. f4e4]
+transM _ = error "Can't translate over a point, only over a vector!"
+
 
 -- vim: expandtab smarttab sw=4 ts=4
 

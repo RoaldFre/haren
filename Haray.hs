@@ -8,6 +8,7 @@ import Math
 import Renderer
 
 import Data.Maybe
+--import System.Random.Mersenne.Pure64
 import System.Random
 
 import Control.Monad.State
@@ -81,10 +82,10 @@ getRandom = do
     setRndGen newGen
     return rand
 
-walk :: Ray -> Flt -> Point
+walk :: Ray -> Flt -> Pt3
 walk ray dist = (rayOrigin ray) .+. (rayDir ray) .* dist
 
-makeIntersection :: Ray -> Flt -> UnitVector -> Material -> Intersection
+makeIntersection :: Ray -> Flt -> UVec3 -> Material -> Intersection
 makeIntersection ray dist normal mat = 
     Intersection (walk ray dist) dist (rayDir ray) normal mat
 
@@ -202,11 +203,11 @@ incidentDirectLight1 int light = do
         shadowRays = filter correctSide allRays
         correctSide ray = (rayDir ray) .*. (intNorm int) > 0
     
--- | Spawn Rays from the given Point to the given light.
-spawnShadowRays :: Light -> Point -> [Ray]
+-- | Spawn Rays from the given point to the given light.
+spawnShadowRays :: Light -> Pt3 -> [Ray]
 spawnShadowRays (Light lightType _) point = spawnShadowRaysFromType lightType point
 
-spawnShadowRaysFromType :: LightType -> Point -> [Ray]
+spawnShadowRaysFromType :: LightType -> Pt3 -> [Ray]
 spawnShadowRaysFromType (PointSource lightPos) point = [ray]
     where
         diff = lightPos .-. point
@@ -218,7 +219,7 @@ spawnShadowRaysFromType (Softbox lightPos) point =
     concat [spawnShadowRaysFromType (PointSource pos) point | pos <- positions]
     where
         positions = 
-        --| Softbox Point Vector Vector Int -- ^ Softbox origin side1 side2 numRays
+        --| Softbox Pt3 Vec3 Vec3 Int -- ^ Softbox origin side1 side2 numRays
 -}
         
 -- TODO: Softbox as concatmap over random pointsources.

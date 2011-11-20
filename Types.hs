@@ -14,36 +14,36 @@ data PureMaterial = PureMaterial MaterialType Color deriving Show
 newtype MaterialComponent = MaterialComponent (Flt, PureMaterial) deriving Show
 type Material = [MaterialComponent]
 
-data Geometry = Sphere Flt Point
-    | Triangle Point Point Point
+data Geometry = Sphere Flt Pt3
+    | Triangle Pt3 Pt3 Pt3
         deriving Show
 
 data Object = Object Geometry Material deriving Show
 
 data Ray = Ray {
-        rayOrigin :: Point,
-        rayDir    :: UnitVector,
+        rayOrigin :: Pt3,
+        rayDir    :: UVec3,
         rayNear   :: Flt, -- ^ near clipping distance
         rayFar    :: Flt  -- ^ far clipping distance
     } deriving Show
 
 data Intersection = Intersection {
-        intPos  :: Point,       -- ^ Position of the intersection
-        intDist :: Flt,         -- ^ Distance of intersecting ray
-        intDir  :: UnitVector,  -- ^ Direction of intersecting ray
-        intNorm :: UnitVector,  -- ^ Normal vector of intersection surface
-        intMat  :: Material     -- ^ Material of intersection surface
+        intPos  :: Pt3,     -- ^ Position of the intersection
+        intDist :: Flt,     -- ^ Distance of intersecting ray
+        intDir  :: UVec3,   -- ^ Direction of intersecting ray
+        intNorm :: UVec3,   -- ^ Normal vector of intersection surface
+        intMat  :: Material -- ^ Material of intersection surface
     } deriving Show
 
 data CameraGaze = CameraGaze {
-        cgPos  :: Point,
-        cgDir  :: UnitVector,
-        cgUp   :: UnitVector,
+        cgPos  :: Pt3,
+        cgDir  :: UVec3,
+        cgUp   :: UVec3,
         cgFovy :: Flt -- ^ in degrees
     } deriving Show
 
 data Camera = Camera {
-        camPos  :: Point,
+        camPos  :: Pt3,
         camUVW  :: CoordSyst,
         camFovy :: Flt -- ^ in degrees
     } deriving Show
@@ -55,15 +55,15 @@ camFromCamGaze (CameraGaze pos dir up fovy) = Camera pos (u, v, w) fovy
         u = normalize $ up .^. w
         v = w .^. u
 
-camLookingAt :: Point -> Point -> UnitVector -> Flt -> Camera
+camLookingAt :: Pt3 -> Pt3 -> UVec3 -> Flt -> Camera
 camLookingAt pos lookAt up fovy =
     camFromCamGaze $ CameraGaze pos (direction pos lookAt) up fovy
 
-type CoordSyst = (UnitVector, UnitVector, UnitVector)
+type CoordSyst = (UVec3, UVec3, UVec3)
 
-data LightType = Directional Vector       -- ^ directional light, no attenuation
-        | PointSource Point               -- ^ Pointsource position
-        | Softbox Point Vector Vector Int -- ^ Softbox origin side1 side2 numRays
+data LightType = Directional Vec3   -- ^ directional light, no attenuation
+        | PointSource Pt3           -- ^ Pointsource position
+        | Softbox Pt3 Vec3 Vec3     -- ^ Softbox origin side1 side2 numRays
         deriving Show
 
 data Light = Light {
@@ -72,7 +72,7 @@ data Light = Light {
     } deriving Show
 
 -- | (direction pointing *to* the lightsource, color of incident light)
-type IncidentLight = (UnitVector, Color)
+type IncidentLight = (UVec3, Color)
 
 data Scene = Scene {
         sLights :: [Light],
