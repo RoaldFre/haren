@@ -51,7 +51,7 @@ data Camera = Camera {
 camFromCamGaze :: CameraGaze -> Camera
 camFromCamGaze (CameraGaze pos dir up fovy) = Camera pos (u, v, w) fovy
     where
-        w = (-1) *. dir
+        w = (-1::Flt) .*. dir
         u = normalize $ up .^. w
         v = w .^. u
 
@@ -97,10 +97,17 @@ newtype Resolution = Resolution (Int, Int) deriving Show
 data Color = Color Flt Flt Flt
 
 instance (NumTuple Flt) Color where
-    toList (Color r g b) = [r, g, b]
-    fromList [r, g, b] = Color r g b
+    tupleToList (Color r g b) = [r, g, b]
+    tupleFromList [r, g, b] = Color r g b
 instance Show Color where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
+instance Mult Color Color Flt where
+    (.*.) = dot -- TODO: this is a bit contrived and probably not really needed
+instance Mult Color Flt Color where (.*.) = (.*)
+instance Mult Flt Color Color where (.*.) = (*.)
+instance Div Color Flt
+instance Add Color where (.+.) = addt
+instance Sub Color where (.-.) = subt
 
 black = Color 0 0 0
 white = Color 1 1 1

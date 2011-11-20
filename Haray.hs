@@ -105,7 +105,16 @@ intersectWith1 ray@(Ray e d min max) (Object (Sphere r c) mat) =
                 (d .*. d)
                 (2 *. d .*. (e .-. c))
                 ((e .-. c).^2 - r^2)
-        sphereNormal t = (e .+. t*.d .-. c) ./ r
+        sphereNormal t = (e .+. t*.d .-. c) ./. r
+
+solveQuadEq :: Flt -> Flt -> Flt -> [Flt]
+solveQuadEq a b c
+    | d < 0     = []
+    | d > 0     = [(-b - sqrt(d))/(2*a), (-b + sqrt(d))/(2*a)]
+    | otherwise = [-b/(2*a)]
+    where
+        d = b^2 - 4*a*c
+
 
 cameraRay :: Resolution -> Camera -> Pixel -> Ray
 cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
@@ -202,7 +211,7 @@ spawnShadowRaysFromType (PointSource lightPos) point = [ray]
     where
         diff = lightPos .-. point
         distance = len diff
-        direction = diff ./ distance
+        direction = diff ./. distance
         ray = Ray point direction epsilon distance
 {-
 spawnShadowRaysFromType (Softbox lightPos) point =
