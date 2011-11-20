@@ -12,5 +12,9 @@ prof:
 	./Main +RTS -p -sstderr
 	less Main.prof
 
+test:
+	ghc ${OPTS} --make MathTest.hs
+	./MathTest
+
 clean:
 	rm -f *hi *hc *o *prof
