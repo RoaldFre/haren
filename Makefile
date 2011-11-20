@@ -1,6 +1,6 @@
 all: main
 
-OPTS=-O2 -rtsopts -threaded -funbox-strict-fields -fexcess-precision -funfolding-use-threshold=32 -optc-O3 -optc-ffast-math 
+OPTS=-O2 -rtsopts -threaded -funbox-strict-fields -fexcess-precision -funfolding-use-threshold=1000 -optc-O3 -optc-ffast-math -opta-march=native -optc-march=native
 
 main:
 	ghc ${OPTS} --make Main
