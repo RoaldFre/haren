@@ -11,14 +11,14 @@ main = do
 
 testScene = scene
     where
-        geom1 = Sphere 1.0 (F3   0    0 10)
-        geom2 = Sphere 1.0 (F3 (-1.1) 0 12)
-        geom3 = Sphere 1.0 (F3   1.1  0 12)
         mc1 = MaterialComponent (0.1, PureMaterial Diffuse red)
         mc2 =  MaterialComponent (1, PureMaterial (Phong 50) blue)
         mc3 =  MaterialComponent (1, PureMaterial Reflecting $ 0.8 *. white)
         mat = [mc1, mc2, mc3]
-        objs = [Object geom1 mat, Object geom2 mat, Object geom3 mat]
+        objs = Fork
+                [Node (Translation (F3   0    0 10)) (Leaf (Object Sphere mat))
+                ,Node (Translation (F3 (-1.1) 0 12)) (Leaf (Object Sphere mat))
+                ,Node (Translation (F3 ( 1.1) 0 12)) (Leaf (Object Sphere mat))]
         lights = [Light (PointSource (F3   10  10 10)) (white)
                  ,Light (PointSource (F3 (-10) 10 10)) (0.5 *. white)]
         scene = Scene lights objs

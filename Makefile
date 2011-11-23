@@ -15,7 +15,11 @@ OPTS=-Odph -O2 -rtsopts -threaded -funbox-strict-fields -fexcess-precision -funf
 OPTS_QUICK=-O2 -rtsopts -threaded -funbox-strict-fields -funfolding-use-threshold=200 
 
 main:
+	ghc ${OPTS_QUICK} --make Main
+perf:
 	ghc ${OPTS} --make Main
+forceperf:
+	ghc ${OPTS} --make -fforce-recomp Main
 force:
 	ghc ${OPTS} --make -fforce-recomp Main
 

@@ -79,7 +79,10 @@ class (Num x, Fractional x, Show x) => NumTuple x t | t -> x where
 
 
 -- | Numerical tuple with 4 components
-data F4 = F4 !Flt !Flt !Flt !Flt
+data F4 = F4 {f4x :: !Flt
+             ,f4y :: !Flt
+             ,f4z :: !Flt
+             ,f4w :: !Flt}
 
 instance (NumTuple Flt) F4 where
     tupleToList (F4 x y z w) = [x, y, z, w]
@@ -106,7 +109,9 @@ pt4 :: Pt3 -> Pt4
 pt4 (F3 x y z) = F4 x y z 1
 
 -- | Numerical tuple with 3 components
-data F3 = F3 !Flt !Flt !Flt
+data F3 = F3 {f3x :: !Flt
+             ,f3y :: !Flt
+             ,f3z :: !Flt}
 
 instance (NumTuple Flt) F3 where
     tupleToList (F3 x y z) = [x, y, z]
@@ -297,6 +302,22 @@ instance Sub M4 where (.-.) = subm
 instance Sub M3 where (.-.) = subm
 
 
+-- | Make a 3D point from a point in homogeneous coordinates
+mkPt3 :: Pt4 -> Pt3
+mkPt3 p@(F4 x y z w) = F3 (x/w) (y/w) (z/w)
+
+-- | Make a 3D vector from a vector in homogeneous coordinates
+mkVec3 :: Vec4 -> Vec3
+mkVec3 p@(F4 x y z _) = F3 x y z
+
+-- | Apply the 4x4 matrix to the given 3D point
+multPt :: M4 -> Pt3 -> Pt3
+m `multPt` p = mkPt3 $ m .*. (homP p)
+
+-- | Apply the 4x4 matrix to the given 3D vector
+multVec :: M4 -> Vec3 -> Vec3
+m `multVec` p = mkVec3 $ m .*. (homV p)
+
 -- | Homogeneous coordinates for a 3D point.
 homP :: Pt3 -> Pt4
 homP (F3 x y z) = F4 x y z 1
@@ -305,17 +326,22 @@ homP (F3 x y z) = F4 x y z 1
 homV :: Vec3 -> Vec4
 homV (F3 x y z) = F4 x y z 0
 
--- | Translation matrix for the given 3D vector.
-trans3M4 :: Vec3 -> M4
-trans3M4 = transM4 . homV
-
 -- | Translation matrix for the given vector in homogeneous coordinates.
 transM4 :: Vec4 -> M4
 transM4 v@(F4 x y z 0) = transpose $ matrFromList [f4e1, f4e2, f4e3, v .+. f4e4]
+transM4 _ = error "Can only translate over a *vector*"
 
 -- | Translation matrix (M, M^-1) for the given vector.
 transM4s :: Vec4 -> (M4, M4)
 transM4s v = (transM4 v, transM4 $ (-1) *. v)
+
+-- | Translation matrix for the given 3D vector.
+trans3M4 :: Vec3 -> M4
+trans3M4 = transM4 . homV
+
+-- | Translation matrix (M, M^-1) for the given 3D vector.
+trans3M4s :: Vec3 -> (M4, M4)
+trans3M4s = transM4s . homV
 
 -- | Matrix for rotation along the given (non-zero) axis vector and the 
 -- given angle in degrees.
@@ -342,13 +368,21 @@ rotM4s :: Vec3 -> Flt -> (M4, M4)
 rotM4s axis angle = (rot, transpose rot)
     where rot = rotM4 axis angle
 
--- | Translation matrix for the given factor.
+-- | Scaling matrix for the given factor.
 scaleM4 :: Flt -> M4
 scaleM4 = (.*.) m4id
 
--- | Translation matrices (M, M^-1) for the given factor.
+-- | Scaling matrices (M, M^-1) for the given factor.
 scaleM4s :: Flt -> (M4, M4)
 scaleM4s x = (scaleM4 x, scaleM4 (1/x))
+
+-- | Scaling matrix for the given x, y, z factors.
+scalexyzM4 :: Flt -> Flt -> Flt -> M4
+scalexyzM4 x y z = M4 (x .*. f4e1) (y .*. f4e2) (z .*. f4e3) f4e4
+
+-- | Scaling matrices (M, M^-1) for the given x, y, z factors.
+scalexyzM4s :: Flt -> Flt -> Flt -> (M4, M4)
+scalexyzM4s x y z = (scalexyzM4 x y z, scalexyzM4 (1/x) (1/y) (1/z))
 
 -- vim: expandtab smarttab sw=4 ts=4
 
