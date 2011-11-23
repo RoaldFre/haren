@@ -8,8 +8,11 @@ import Graphics.UI.SDL as SDL hiding (Pixel, Color)
 import Graphics.UI.SDL.Types
 import System.Exit
 
-import Image
+import Renderer
 import Math
+import Types
+
+import Control.Applicative
 
 data RenderMode = PerPixel | PerLine | PerLines Int
 
@@ -18,28 +21,37 @@ chunkSize PerPixel _ = 1
 chunkSize PerLine (Resolution (nx, _)) = nx
 chunkSize (PerLines n) res = n * (chunkSize PerLine res)
 
-renderSDL :: RenderMode -> Image -> IO ()
-renderSDL renderMode image = do
+renderSDL :: (Renderer c m) => RenderMode -> Scene -> c -> IO ()
+renderSDL renderMode scene conf = do
+    let (Resolution (nx, ny)) = run scene conf getResolution
     screen <- setVideoMode nx ny 32 [SWSurface]
     setCaption "haren" []
-    let pixels = [Pixel (i, j) | j <- [0 .. ny - 1], i <- [0 .. nx - 1]]
-    let putPixelActions = map (putPixel screen) $ zip pixels (map (imgMap image) pixels)
-    let actions = sprinkle n [SDL.flip screen, pollForQuit] putPixelActions
-    sequence actions
+    sequence $ run scene conf (renderSDLactions renderMode screen)
     quitHandler
-    where
-        res@(Resolution (nx, ny)) = imgRes image
-    n = chunkSize renderMode res
+
+renderSDLactions :: (Renderer c m) => RenderMode -> Surface -> m [IO ()]
+renderSDLactions renderMode screen  = do
+    res@(Resolution (nx, ny)) <- getResolution
+    let pixels = [Pixel (i, j) | j <- [0 .. ny - 1], i <- [0 .. nx - 1]]
+    putPixelActions <- mapM pixToPutPix pixels
+    let n = chunkSize renderMode res
+    return $ sprinkle n [SDL.flip screen, pollForQuit] putPixelActions
+    where 
+        pixToPutPix :: (Renderer c m) => Pixel -> m (IO ())
+        pixToPutPix pixel = do
+            color <- colorPixel pixel
+            return $ putPixel screen (pixel, color)
 
 -- | 'Sprinkle' the first given list at every n'th position in the second 
 -- list, including at the very beginnig and the very end
+--sprinkle :: Int -> [a] -> [a] -> [a]
 sprinkle :: Int -> [a] -> [a] -> [a]
 sprinkle n insertion [] = insertion
 sprinkle n insertion xs = insertion ++ chunk ++ sprinkle n insertion rest
     where (chunk, rest) = splitAt n xs
 
 putPixel :: Surface -> (Pixel, Color) -> IO ()
-putPixel s ((Pixel (x,y)), (r,g,b)) = do
+putPixel s ((Pixel (x,y)), (Color r g b)) = do
     pixels <- castPtr `liftM` surfaceGetPixels s
     pixelCol <- mapRGB (surfaceGetPixelFormat s) r8 g8 b8
     pokeElemOff pixels ((y * surfaceGetWidth s) + x) pixelCol

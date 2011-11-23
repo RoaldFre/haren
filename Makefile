@@ -8,7 +8,7 @@ OPTS_LLVM_BASIC=-fllvm -optlo-O3 -optlc-O3 ${LLVM_FP}
 OPTS_LLVM_AGRESSIVE=-fllvm -optlo-basicaa -optlo-basiccg -optlo-count-aa -optlo-domfrontier -optlo-domtree -optlo-globalsmodref-aa -optlo-memdep -optlo-no-aa -optlo-postdomtree -optlo-codegenprepare -optlo-adce -optlo-functionattrs -optlo-block-placement -optlo-constmerge -optlo-constprop -optlo-die -optlo-dse -optlo-globaldce -optlo-globalopt -optlo-indvars -optlo-inline -optlo-ipconstprop -optlo-ipsccp -optlo-lcssa -optlo-loop-deletion -optlo-loop-unroll -optlo-loop-unswitch -optlo-loop-simplify -optlo-mem2reg -optlo-memcpyopt -optlo-scalarrepl -optlo-tailcallelim -optlo-prune-eh ${LLVM_FP}
 #based on http://donsbot.wordpress.com/2010/03/01/evolving-faster-haskell-programs-now-with-llvm/
 
-BACKEND_OPTS=${OPTS_LLVM_AGRESSIVE}
+BACKEND_OPTS=${OPTS_LLVM_BASIC}
 
 OPTS=-Odph -O2 -rtsopts -threaded -funbox-strict-fields -fexcess-precision -funfolding-use-threshold=1000 -funfolding-creation-threshold=1000 ${BACKEND_OPTS}
 
@@ -16,11 +16,11 @@ OPTS_QUICK=-O2 -rtsopts -threaded -funbox-strict-fields -funfolding-use-threshol
 
 main:
 	ghc ${OPTS_QUICK} --make Main
+force:
+	ghc ${OPTS_QUICK} --make -fforce-recomp Main
 perf:
 	ghc ${OPTS} --make Main
 forceperf:
-	ghc ${OPTS} --make -fforce-recomp Main
-force:
 	ghc ${OPTS} --make -fforce-recomp Main
 
 gcc:
