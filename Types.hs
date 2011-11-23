@@ -61,28 +61,6 @@ data Object = Object Geometry Material deriving Show
 instance Boxable Object where
     box (Object geom _) = box geom
 
-data Ray = Ray {
-        rayOrigin :: Pt3,
-        rayDir    :: UVec3,
-        rayNear   :: Flt, -- ^ near clipping distance
-        rayFar    :: Flt  -- ^ far clipping distance
-    } deriving Show
-
-data Intersection = Intersection {
-        intPos  :: Pt3,     -- ^ Position of the intersection
-        intDist :: Flt,     -- ^ Distance of intersecting ray
-        intDir  :: UVec3,   -- ^ Direction of intersecting ray
-        intNorm :: UVec3,   -- ^ Normal vector of intersection surface
-        intMat  :: Material -- ^ Material of intersection surface
-    } deriving Show
-
--- | Note: this ordering only really makes sense for intersections of the same ray.
-instance Ord Intersection where
-    i1 <= i2  =  intDist i1 <= intDist i2
--- Prerequisite for Ord...
-instance Eq Intersection where
-    i1 == i2  =  intDist i1 == intDist i2
-
 data CameraGaze = CameraGaze {
         cgPos  :: Pt3,
         cgDir  :: UVec3,
@@ -118,9 +96,6 @@ data Light = Light {
         lightType  :: LightType,
         lightColor :: Color
     } deriving Show
-
--- | (direction pointing *to* the lightsource, color of incident light)
-type IncidentLight = (UVec3, Color)
 
 data ObjectGraph a = Node a (ObjectGraph a)
                    | Fork [ObjectGraph a]

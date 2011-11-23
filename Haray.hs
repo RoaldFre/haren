@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, DeriveFunctor #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, DeriveFunctor, TypeSynonymInstances, FlexibleInstances #-}
 
 module Haray where
 --module Haray (RayTraceConfig (..), RayTracer, rayTrace) where
@@ -7,7 +7,7 @@ import Types
 import Math
 import Renderer
 
-import Data.List
+import Data.List hiding (transpose)
 import Data.Maybe
 --import System.Random.Mersenne.Pure64
 import System.Random
@@ -35,16 +35,66 @@ data RayTraceState = RayTraceState {
         stateMaxDepth :: Int
     } deriving Show
 
-
--- | Transformed objects represented by transformations and the untransformed object.
-data TransformedObject = TransObj {
-        toTrans    :: M4,
-        toInvTrans :: M4,
-        toObject   :: Object
+data Ray = Ray {
+        rayOrigin :: Pt3,
+        rayDir    :: Vec3, -- ^ *NOT* neccesarily normalised (eg for transformed rays)
+        rayNear   :: Flt,  -- ^ near clipping distance
+        rayFar    :: Flt   -- ^ far clipping distance
     } deriving Show
 
-instance Boxable TransformedObject where
-    box to = transformBox (toTrans to) $ box $ toObject to
+data Intersection = Intersection {
+        intPos  :: Pt3,     -- ^ Position of the intersection
+        intDist :: Flt,     -- ^ Distance of intersecting ray
+        intDir  :: Vec3,    -- ^ Direction of intersecting ray, *NOT* normalised
+        intNorm :: UVec3,   -- ^ Normal vector of intersection surface, normalised
+        intMat  :: Material -- ^ Material of intersection surface
+    } deriving Show
+
+-- | Note: this ordering only really makes sense for intersections of the same ray.
+instance Ord Intersection where
+    i1 <= i2  =  intDist i1 <= intDist i2
+-- Prerequisite for Ord...
+instance Eq Intersection where
+    i1 == i2  =  intDist i1 == intDist i2
+
+
+-- | Transformed thingamajings, represented by transformations and the 
+-- untransformed thingamajing.
+data Transformed a = Transformed {
+        tTrans    :: M4,
+        tInvTrans :: M4,
+        tOriginal :: a
+    } deriving Show
+
+instance (Ord a) => Ord (Transformed a) where
+    t1 <= t2  =  (tOriginal t1) <= (tOriginal t2)
+-- Prerequisite for Ord...
+instance (Eq a) => Eq (Transformed a) where
+    t1 == t2  =  (tOriginal t1) == (tOriginal t2)
+
+-- | tTrans is here the transformation that should be applied to the object
+type TransformedObj = Transformed Object
+
+-- | Two representations of the same Interesection: One in local 
+-- coordinates of the (transformed) object, and one in global coordinates.
+data Ints = Ints {localInt  :: Intersection,
+                  globalInt :: Intersection}
+instance Ord Ints where
+    i1 <= i2  =  (localInt i1) <= (localInt i2)
+instance Eq Ints where
+    i1 == i2  =  (localInt i1) == (localInt i2)
+-- Prerequisite for Ord...
+
+-- | The contained local intersection is the result of intersecting an 
+-- 'original' object with the inverse transformed (tInvTrans) ray. The 
+-- contained global intersection is this local intersection transformed 
+-- according to how the 'original' object should be transformed (thus via 
+-- tTrans).
+type TransformedInts = Transformed Ints
+
+
+instance Boxable TransformedObj where
+    box to = transformBox (tTrans to) $ box $ tOriginal to
 
 transformBox :: M4 -> Box -> Box
 transformBox trans b = box $ map (trans `multPt`) $ getBoxVertices b
@@ -55,11 +105,11 @@ getBoxVertices (Box p1 p2) = [p1 .+. (F3 x y z) | x <- [0, f3x (p2 .-. p1)],
                                                   y <- [0, f3y (p2 .-. p1)],
                                                   z <- [0, f3z (p2 .-. p1)]]
 
-flattenSceneGraph :: SceneGraph -> [TransformedObject]
+flattenSceneGraph :: SceneGraph -> [TransformedObj]
 flattenSceneGraph sceneGraph = 
     map mkTransObj $ flattenObjectGraph multTuples (m4id, m4id) matricesGraph
     where
-        mkTransObj ((m,mInv), obj) = TransObj m mInv obj
+        mkTransObj ((m,mInv), obj) = Transformed m mInv obj
         multTuples (a, b) (x, y) = (a .*. x, b .*. y)
         matricesGraph = transfoM4s `fmap` sceneGraph
 
@@ -98,13 +148,15 @@ instance (Boxable a) => Boxable (BVH a) where
     box (BVHleaf b) = box b
     box (BVHnode b1 b2) = box (b1, b2)
 
-type SceneStructure = BVH TransformedObject
+type SceneStructure = BVH TransformedObj
 
 
 
 
 -- | Get a list of objects that are potentially intersected with the given 
 -- ray.
+-- TODO: I'm not testing if I won't hit with the *entire* bvh alltogether 
+-- (== slight performance drop for small trees)
 candidateObjects :: Ray -> BVH a -> [a]
 candidateObjects ray (BVHleaf b) = map unbox $ filter (ray `hitsBoxed`) b
 candidateObjects ray (BVHnode b1@(Boxed _ _) b2@(Boxed _ _)) =
@@ -248,42 +300,37 @@ makeIntersection :: Ray -> Flt -> UVec3 -> Material -> Intersection
 makeIntersection ray dist normal mat = 
     Intersection (walk ray dist) dist (rayDir ray) normal mat
 
-intersectFirst :: SceneStructure -> Ray -> Maybe Intersection
+intersectFirst :: SceneStructure -> Ray -> Maybe TransformedInts
 intersectFirst scene ray =
     case intersectWith ray scene of
         []   -> Nothing
         ints -> Just (minimum ints)
 
 
-test =
-    candidateObjects (Ray f3zero f3e3 0 infinity) scene
-    where
-        mc1 = MaterialComponent (0.1, PureMaterial Diffuse red)
-        mc2 =  MaterialComponent (1, PureMaterial (Phong 50) blue)
-        mc3 =  MaterialComponent (1, PureMaterial Reflecting $ 0.8 *. white)
-        --mat = [mc1, mc2, mc3]
-        mat = []
-        objs = Fork
-                [Node (Translation (F3   0    0 10)) (Leaf (Object Sphere mat))
-                ,Node (Translation (F3 (-1.1) 0 12)) (Leaf (Object Sphere mat))
-                ,Node (Translation (F3 ( 1.1) 0 12)) (Leaf (Object Sphere mat))]
-        lights = [Light (PointSource (F3   10  10 10)) (white)
-                 ,Light (PointSource (F3 (-10) 10 10)) (0.5 *. white)]
-        scene = sceneGraphToInternalStructure objs
-
-
-
-intersectWith :: Ray -> SceneStructure -> [Intersection]
+intersectWith :: Ray -> SceneStructure -> [TransformedInts]
 intersectWith ray scene = concatMap (intersectWith1 ray) objs
     where objs = candidateObjects ray scene
 
-intersectWith1 :: Ray -> TransformedObject -> [Intersection]
-intersectWith1 ray (TransObj trans invTrans obj) =
-    intersectWithObject (transformRay invTrans ray) obj
+intersectWith1 :: Ray -> TransformedObj -> [TransformedInts]
+intersectWith1 ray (Transformed trans invTrans obj) =
+    map (\(li,gi) -> Transformed trans invTrans (Ints li gi)) ints
+    where
+        localInts = intersectWithObject (transformRay invTrans ray) obj
+        globalInts = map (transformInt (rayOrigin ray) (trans, invTrans)) localInts
+        ints = zip localInts globalInts
 
 transformRay :: M4 -> Ray -> Ray
 transformRay trans (Ray origin direction near far) =
     Ray (trans `multPt` origin) (trans `multVec` direction) near far
+
+transformInt :: Pt3 -> (M4, M4) -> Intersection -> Intersection
+transformInt originalOrigin (trans, invTrans) int =
+    int {intDir = newDir, intPos = newPos, intNorm = newNorm}
+    where 
+        newDir = trans `multVec` (intDir int)
+        --newPos = trans `multPt` (intPos int),
+        newPos = originalOrigin .+. (newDir .* intDist int) 
+        newNorm = normalize $ (transpose invTrans) `multVec` (intNorm int)
 
 intersectWithObject :: Ray -> Object -> [Intersection]
 intersectWithObject ray@(Ray e d min max) (Object Sphere mat) =
@@ -294,8 +341,6 @@ intersectWithObject ray@(Ray e d min max) (Object Sphere mat) =
                 (2 *. d .*. e)
                 (e.^2 - 1)
         sphereNormal t = (e .+. t*.d)
-
-
 
 solveQuadEq :: Flt -> Flt -> Flt -> [Flt]
 solveQuadEq a b c
@@ -326,40 +371,47 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
 
 
 -- | Calculate the Color of the given Intersection
-color :: Intersection -> RayTracer Color
-color int =
+color :: TransformedInts -> RayTracer Color
+color transInts =
 --TODO STRICT//seq?
-    foldlM (addWeightedPureColor int) black (intMat int)
+    foldlM (addWeightedPureColor transInts) black (intMat $ getLocalInt transInts)
 
-addWeightedPureColor :: Intersection -> Color -> MaterialComponent -> RayTracer Color
-addWeightedPureColor int col (MaterialComponent (weight, pureMat)) = do
-    incidentLight <- incidentDirectLight int
-    pureCol <- colorPure int incidentLight pureMat
+addWeightedPureColor :: TransformedInts -> Color -> MaterialComponent -> RayTracer Color
+addWeightedPureColor transInt col (MaterialComponent (weight, pureMat)) = do
+    incidentLight <- incidentDirectLight (globalInt)
+    pureCol <- colorPure transInt incidentLight pureMat
     return $ col  .+.  weight *. pureCol
-
+    where Ints _ globalInt = tOriginal transInt
 
 -- | Calculate the Color of a PureMaterial under the given light at a given 
 -- Intersection
-colorPure :: Intersection -> [IncidentLight] -> PureMaterial -> RayTracer Color
-colorPure int incidentLights pureMat@(PureMaterial matType matCol) = do
-    contributions <- mapM (colorMaterialType int matType) incidentLights
+colorPure :: TransformedInts -> [IncidentLight] -> PureMaterial -> RayTracer Color
+colorPure transInt incidentLights pureMat@(PureMaterial matType matCol) = do
+    contributions <- mapM (colorMaterialType transInt matType) incidentLights
     let total = foldl' (.+.) black contributions
     return $ matCol .***. total 
 
+getGlobalInt :: TransformedInts -> Intersection
+getGlobalInt = globalInt . tOriginal
 
-colorMaterialType :: Intersection -> MaterialType -> IncidentLight -> RayTracer Color
-colorMaterialType int Diffuse (ilDir, ilCol) =
-    return $ ilCol .* (ilDir .*. (intNorm int))
-colorMaterialType int (Phong p) (ilDir, ilCol) =
+getLocalInt :: TransformedInts -> Intersection
+getLocalInt = localInt . tOriginal
+
+colorMaterialType :: TransformedInts -> MaterialType -> IncidentLight -> RayTracer Color
+colorMaterialType transInts Diffuse (ilDir, ilCol) =
+    return $ ilCol .* (ilDir .*. (intNorm $ getGlobalInt transInts))
+colorMaterialType transInts (Phong p) (ilDir, ilCol) =
     return $ ilCol .* ((h .*. n) ** p)
     where
         n = intNorm int
         h = normalize $ ilDir .-. (intDir int)
-colorMaterialType int Reflecting (ilDir, ilCol) =
+        int = getGlobalInt transInts
+colorMaterialType transInts Reflecting (ilDir, ilCol) =
     black `orRecurseOn` ((ilCol .***.) <$> (colorRay ray))
     where
-        ray = Ray (intPos int) reflectedDir epsilon infinity
-        reflectedDir = reflect (intDir int) (intNorm int)
+        ray = Ray (intPos globInt) reflectedDir epsilon infinity
+        reflectedDir = reflect (intDir globInt) (intNorm globInt)
+        globInt = getGlobalInt transInts
     --TODO attenuation?
 
 
@@ -368,8 +420,12 @@ colorRay ray = do
     scene <- getScene
     case (intersectFirst scene ray) of
         Nothing -> return black --(r,g,b)
-        Just int -> color int
+        Just transfInt -> color transfInt
 
+
+-- | (direction pointing *to* the lightsource, color of incident light)
+-- The direction is normalised to unity.
+type IncidentLight = (UVec3, Color)
 
 -- | Returns the incident light from the scene that's hitting the given 
 -- intersection point from the 'correct' side (as determined by the 
@@ -418,7 +474,7 @@ spawnShadowRaysFromType (Softbox lightPos) point =
 propagateShadowRay :: SceneStructure -> Light -> Ray -> Maybe IncidentLight
 propagateShadowRay scene light ray =
     case (intersectWith ray scene) of
-        [] -> Just ((rayDir ray), color)
+        [] -> Just (normalize (rayDir ray), color)
         _  -> Nothing
     where
         color = (lightColor light) .* (attenuation (lightType light) ray)
