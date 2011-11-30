@@ -7,7 +7,7 @@ import Types
 import Math
 import Renderer
 
-import Data.List hiding (transpose)
+import Data.List hiding (transpose, intersect)
 import Data.Maybe
 --import System.Random.Mersenne.Pure64
 import System.Random
@@ -34,28 +34,6 @@ data RayTraceState = RayTraceState {
         stateCam    :: Camera,
         stateMaxDepth :: Int
     } deriving Show
-
-data Ray = Ray {
-        rayOrigin :: Pt3,
-        rayDir    :: Vec3, -- ^ *NOT* neccesarily normalised (eg for transformed rays)
-        rayNear   :: Flt,  -- ^ near clipping distance
-        rayFar    :: Flt   -- ^ far clipping distance
-    } deriving Show
-
-data Intersection = Intersection {
-        intPos  :: Pt3,     -- ^ Position of the intersection
-        intDist :: Flt,     -- ^ Distance of intersecting ray
-        intDir  :: Vec3,    -- ^ Direction of intersecting ray, *NOT* normalised
-        intNorm :: UVec3,   -- ^ Normal vector of intersection surface, normalised
-        intMat  :: Material -- ^ Material of intersection surface
-    } deriving Show
-
--- | Note: this ordering only really makes sense for intersections of the same ray.
-instance Ord Intersection where
-    i1 <= i2  =  intDist i1 <= intDist i2
--- Prerequisite for Ord...
-instance Eq Intersection where
-    i1 == i2  =  intDist i1 == intDist i2
 
 
 -- | Transformed thingamajings, represented by transformations and the 
@@ -229,6 +207,10 @@ costOfPartition (a, b) =
     + (halfSurfaceArea $ box b) * fromIntegral (length $ unbox b)
     -- Let's *hope* GHC will get that length inlined with some useful work 
     -- (eg partitioning) so we don't have to do this in O(n)
+    -- TODO: or make *all* partitions, traversing objectlist to 
+    -- make possible subpartitions is O(n) as well and we get the number of 
+    -- elements 'to the left' immediately (and one extra O(n) call for 
+    -- length -> #right)
     where 
         halfSurfaceArea (Box p1 p2) = x*y + y*z + z*x
             where (F3 x y z) = p2 .-. p1
@@ -293,13 +275,6 @@ getRandom = do
     setRndGen newGen
     return rand
 
-walk :: Ray -> Flt -> Pt3
-walk ray dist = (rayOrigin ray) .+. (rayDir ray) .* dist
-
-makeIntersection :: Ray -> Flt -> UVec3 -> Material -> Intersection
-makeIntersection ray dist normal mat = 
-    Intersection (walk ray dist) dist (rayDir ray) normal mat
-
 intersectFirst :: SceneStructure -> Ray -> Maybe TransformedInts
 intersectFirst scene ray =
     case intersectWith ray scene of
@@ -333,22 +308,7 @@ transformInt originalOrigin (trans, invTrans) int =
         newNorm = normalize $ (transpose invTrans) `multVec` (intNorm int)
 
 intersectWithObject :: Ray -> Object -> [Intersection]
-intersectWithObject ray@(Ray e d min max) (Object Sphere mat) =
-    [makeIntersection ray t (sphereNormal t) mat | t <- ts, min < t, t < max]
-    where
-        ts = solveQuadEq
-                (d .*. d)
-                (2 *. d .*. e)
-                (e.^2 - 1)
-        sphereNormal t = (e .+. t*.d)
-
-solveQuadEq :: Flt -> Flt -> Flt -> [Flt]
-solveQuadEq a b c
-    | d < 0     = []
-    | d > 0     = [(-b - sqrt(d))/(2*a), (-b + sqrt(d))/(2*a)]
-    | otherwise = [-b/(2*a)]
-    where
-        d = b^2 - 4*a*c
+intersectWithObject ray (Object obj mat) = map (\x -> x mat) $ intersect obj ray
 
 
 cameraRay :: Resolution -> Camera -> Pixel -> Ray

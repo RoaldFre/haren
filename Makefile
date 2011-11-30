@@ -1,6 +1,6 @@
 all: main
 
-OPTS_C=-optc-O3 -opta-march=native -optc-march=native -optl-march-native -optc-ffast-math -optc-mfpmath=sse
+OPTS_C=-optc-O3 -opta-march=native -optc-march=native -optl-march-native -optc-ffast-math -optc-mfpmath=sse -optc-msse4
 
 LLVM_FP=-optlo-enable-unsafe-fp-math -optlc-enable-unsafe-fp-math -optlo-enable-no-nans-fp-math -optlo-enable-fp-mad
 
@@ -10,7 +10,7 @@ OPTS_LLVM_AGRESSIVE=-fllvm -optlo-basicaa -optlo-basiccg -optlo-count-aa -optlo-
 
 BACKEND_OPTS=${OPTS_LLVM_BASIC}
 
-OPTS=-Odph -O2 -rtsopts -threaded -funbox-strict-fields -fexcess-precision -funfolding-use-threshold=1000 -funfolding-creation-threshold=1000 ${BACKEND_OPTS}
+OPTS=-Odph -O2 -rtsopts -threaded -funbox-strict-fields -fexcess-precision -funfolding-use-threshold=1000 -funfolding-creation-threshold=1000 -fspec-constr-count=64 -fspec-constr-threshold=1000 -static ${BACKEND_OPTS}
 
 OPTS_QUICK=-O2 -rtsopts -threaded -funbox-strict-fields -funfolding-use-threshold=200 
 
@@ -24,11 +24,11 @@ forceperf:
 	ghc ${OPTS} --make -fforce-recomp Main
 
 gcc:
-	make force BACKEND_OPTS=${OPTS_C}
+	make forceperf BACKEND_OPTS=${OPTS_C}
 agg:
-	make force BACKEND_OPTS=${OPTS_LLVM_AGRESSIVE}
+	make forceperf BACKEND_OPTS=${OPTS_LLVM_AGRESSIVE}
 basic:
-	make force BACKEND_OPTS=${OPTS_LLVM_BASIC}
+	make forceperf BACKEND_OPTS=${OPTS_LLVM_BASIC}
 
 prof:
 	ghc ${OPTS} --make -fforce-recomp -prof -auto-all -caf-all Main

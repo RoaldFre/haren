@@ -1,9 +1,9 @@
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances, FlexibleInstances, DeriveFunctor #-}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances, FlexibleInstances, DeriveFunctor, ExistentialQuantification #-}
 
 module Types where
 
 import Math
-import Data.List
+import Data.List hiding (intersect)
 
 
 data MaterialType = Diffuse
@@ -15,12 +15,94 @@ data PureMaterial = PureMaterial MaterialType Color deriving Show
 newtype MaterialComponent = MaterialComponent (Flt, PureMaterial) deriving Show
 type Material = [MaterialComponent]
 
-data Geometry =
-      Sphere                -- ^ Sphere with radius 1 at origin
---    | Triangle Pt3 Pt3 Pt3  -- ^ Triangle with the given vertices --TODO strict?
+
+
+
+data Ray = Ray {
+        rayOrigin :: Pt3,
+        rayDir    :: Vec3, -- ^ *NOT* neccesarily normalised (eg for transformed rays)
+        rayNear   :: Flt,  -- ^ near clipping distance
+        rayFar    :: Flt   -- ^ far clipping distance
+    } deriving Show
+
+data Intersection = Intersection {
+        intPos  :: Pt3,     -- ^ Position of the intersection
+        intDist :: Flt,     -- ^ Distance of intersecting ray
+        intDir  :: Vec3,    -- ^ Direction of intersecting ray, *NOT* normalised
+        intNorm :: UVec3,   -- ^ Normal vector of intersection surface, normalised
+	-- Note to self: Keep this as the last element to use some curry 
+	-- tricks. TODO clean?
+        intMat  :: Material -- ^ Material of intersection surface
+    } deriving Show
+
+-- | Note: this ordering only really makes sense for intersections of the same ray.
+instance Ord Intersection where
+    i1 <= i2  =  intDist i1 <= intDist i2
+-- Prerequisite for Ord...
+instance Eq Intersection where
+    i1 == i2  =  intDist i1 == intDist i2
+
+
+
+
+
+class Geometry a where
+    boundingBox :: a -> Box
+    intersect :: a -> Ray -> [Material -> Intersection]
+
+-- Existential geometry
+data AnyGeom = forall a . Geometry a => MkAnyGeom a
+instance Geometry AnyGeom where
+    boundingBox (MkAnyGeom g) = boundingBox g
+    intersect (MkAnyGeom g) = intersect g
+instance Show AnyGeom where
+    show (MkAnyGeom geom) = "AnyGeom TODO" -- TODO
+
+
+-- | Sphere with radius 1 at origin
+data Sphere = Sphere
+
+
+
+instance Geometry Sphere where
+    boundingBox Sphere = Box (F3 (-1) (-1) (-1)) (F3 1 1 1)
+    intersect Sphere ray@(Ray e d min max) =
+        [makeIntersection ray t (sphereNormal t) | t <- ts, min < t, t < max]
+        where
+            ts = solveQuadEq
+                    (d .*. d)
+                    (2 *. d .*. e)
+                    (e.^2 - 1)
+            sphereNormal t = (e .+. t*.d)
+
+solveQuadEq :: Flt -> Flt -> Flt -> [Flt]
+solveQuadEq a b c
+    | d < 0     = []
+    | d > 0     = [(-b - sqrt(d))/(2*a), (-b + sqrt(d))/(2*a)]
+    | otherwise = [-b/(2*a)]
+    where
+        d = b^2 - 4*a*c
+
+walk :: Ray -> Flt -> Pt3
+walk ray dist = (rayOrigin ray) .+. (rayDir ray) .* dist
+
+makeIntersection :: Ray -> Flt -> UVec3 -> Material -> Intersection
+makeIntersection ray dist normal mat = 
+    Intersection (walk ray dist) dist (rayDir ray) normal mat
+
+data Vertex = Vertex {
+        vPos  :: !Pt3,
+        vNorm :: !UVec3
+    } deriving Show
+
+data Triangle = Triangle !Vertex !Vertex !Vertex  -- ^ Triangle with the given vertices
+        deriving Show
+data TriangleMesh = TriangleMesh [Triangle]
         deriving Show
 
 
+
+data Object = Object AnyGeom Material deriving Show
 
 --TODO define all box stuf only for raytracer? But we make Geometry 
 --implement Boxable, and geometry is defined here, so that's not *that* 
@@ -52,14 +134,13 @@ instance (Boxable a) => Boxable [a] where
     box [] = error "Can't box an empty list of boxables!"
     box boxables = foldl1' (\b1 b2 -> box (b1, b2)) (map box boxables)
 
-    
-instance Boxable Geometry where
-    box Sphere = Box (F3 (-1) (-1) (-1)) (F3 1 1 1)
-
-data Object = Object Geometry Material deriving Show
+instance Boxable AnyGeom where
+    box (MkAnyGeom geom) = boundingBox geom
 
 instance Boxable Object where
     box (Object geom _) = box geom
+
+
 
 data CameraGaze = CameraGaze {
         cgPos  :: Pt3,
@@ -89,7 +170,7 @@ type CoordSyst = (UVec3, UVec3, UVec3)
 
 data LightType = Directional Vec3   -- ^ directional light, no attenuation
         | PointSource Pt3           -- ^ Pointsource position
-        | Softbox Pt3 Vec3 Vec3     -- ^ Softbox origin side1 side2 numRays
+        | Softbox Pt3 Vec3 Vec3 Int -- ^ Softbox origin side1 side2 numRays
         deriving Show
 
 data Light = Light {

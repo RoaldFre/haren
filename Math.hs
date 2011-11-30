@@ -1,4 +1,9 @@
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances, RankNTypes, FlexibleInstances #-}
+--{-# LANGUAGE UndecidableInstances #-}
+-- UndecidableInstances is really nasty, and I need to find a proper way to get a 
+-- functional dependency "t -> x" into:
+-- instance forall t x. (NumTuple t x) => Show t where
+-- (or an alternative way altogether to do the above)
 
 module Math where
 
@@ -77,12 +82,19 @@ class (Num x, Fractional x, Show x) => NumTuple x t | t -> x where
     showTuple :: t -> String
     showTuple t = show $ tupleToList t
 
+--instance forall t x. (NumTuple x t) => Show t where
+--    show = showTuple
+-- This breaks stuff (a lot)
+-- -> still have to do it manually for each instance >_<
+
 
 -- | Numerical tuple with 4 components
 data F4 = F4 {f4x :: !Flt
              ,f4y :: !Flt
              ,f4z :: !Flt
              ,f4w :: !Flt}
+
+-- TODO make this instance of Unbox? (see bling math.hs)
 
 instance (NumTuple Flt) F4 where
     tupleToList (F4 x y z w) = [x, y, z, w]
@@ -305,6 +317,8 @@ instance Sub M3 where (.-.) = subm
 -- | Make a 3D point from a point in homogeneous coordinates
 mkPt3 :: Pt4 -> Pt3
 mkPt3 p@(F4 x y z w) = F3 (x/w) (y/w) (z/w)
+--TODO: split for rasterizer, where w will always be 1 (no perspective, 
+--only translation)?
 
 -- | Make a 3D vector from a vector in homogeneous coordinates
 mkVec3 :: Vec4 -> Vec3

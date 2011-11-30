@@ -7,8 +7,8 @@ import OutputSDL
 import OutputPPM
 
 main = do
-    --renderPPM "out.ppm" testScene testConf
-    renderSDL PerLine testScene testConf
+    renderPPM "out.ppm" testScene testConf
+    --renderSDL PerLine testScene testConf
 
 testScene = scene
     where
@@ -19,10 +19,10 @@ testScene = scene
         objs = Fork
                 [Node (Scale 1 2 1.5) ( 
                     Node (Translation (F3   0    0 8))
-                        (Leaf (Object Sphere mat))
+                        (Leaf (Object (MkAnyGeom Sphere) mat))
                     )
-                ,Node (Translation (F3 (-1.1) 0 12)) (Leaf (Object Sphere mat))
-                ,Node (Translation (F3 ( 1.1) 0 12)) (Leaf (Object Sphere mat))]
+                ,Node (Translation (F3 (-1.1) 0 12)) (Leaf (Object (MkAnyGeom Sphere) mat))
+                ,Node (Translation (F3 ( 1.1) 0 12)) (Leaf (Object (MkAnyGeom Sphere) mat))]
         lights = [Light (PointSource (F3   10  10 10)) (white)
                  ,Light (PointSource (F3 (-10) 10 10)) (0.5 *. white)]
         scene = Scene lights objs
