@@ -30,9 +30,12 @@ agg:
 basic:
 	make forceperf BACKEND_OPTS=${OPTS_LLVM_BASIC}
 
-prof:
+forceprof:
 	ghc ${OPTS} --make -fforce-recomp -prof -auto-all -caf-all Main
-	./Main +RTS -p -sstderr
+prof:
+	ghc ${OPTS} --make -prof -auto-all -caf-all Main
+	./Main +RTS -p -sstderr 2> Main.stderr
+	less Main.stderr
 	less Main.prof
 
 test:

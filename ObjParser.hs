@@ -126,7 +126,7 @@ makeTriangle (vertexIdxs, maybeTextureIdxs, maybeNormalIdxs) = do
     normals <- mapM (\i -> lift $ MV.read (stNormals st) (i-1)) $ catMaybes maybeNormalIdxs
 
     if length normals /= 3
-        then fail "no normals given"
+        then fail "no (or insufficient) normals given"
         else do
             let [v1, v2, v3] = zipWith Vertex positions normals
             return $! Triangle v1 v2 v3

@@ -19,19 +19,21 @@ import Prelude hiding (concatMap)
 import Data.Foldable hiding (minimum, maximum, concat, concatMap, foldl')
 
 data RayTraceConfig = RayTraceConfig {
-        confDepth :: Int,
-        confSeed  :: Int,
-        confRes   :: Resolution, -- TODO, this and cam are shared with rasterizer, not part of raytracer per se
-        confCam   :: Camera
+        confDepth   :: Int,
+        confSeed    :: Int,
+        confRes     :: Resolution, -- TODO, this and cam are shared with rasterizer, not part of raytracer per se
+        confCam     :: Camera,
+        confAmbient :: Color
     } deriving Show
 
 data RayTraceState = RayTraceState {
-        stateScene  :: AnyIntersectable,
-        stateLights :: [Light],
-        stateDepth  :: Int,
-        stateRndGen :: StdGen, -- ^ Random number generator
-        stateRes    :: Resolution,
-        stateCam    :: Camera,
+        stateScene    :: AnyIntersectable,
+        stateLights   :: [Light],
+        stateAmbient  :: Color,
+        stateDepth    :: Int,
+        stateRndGen   :: StdGen, -- ^ Random number generator
+        stateRes      :: Resolution,
+        stateCam      :: Camera,
         stateMaxDepth :: Int
     } deriving Show
 
@@ -210,6 +212,9 @@ sceneGraphToInternalStructure = (buildBVH 1) . (fmap mkBoxed) . flattenSceneGrap
 optimizeSceneGraph :: SceneGraph -> AnyIntersectable
 optimizeSceneGraph = MkAnyI11e . (buildBVH 1) . (fmap mkBoxed) . flattenSceneGraph
 
+-- | Optimize the given trianglemesh for raytracing. Triangles will be 
+-- placed in a BVH, with each leaf containing at most the given number of 
+-- triangles.
 optimizeTriangleMesh:: Int -> TriangleMesh -> AnyGeom
 optimizeTriangleMesh n (TriangleMesh triangles) =
     MkAnyGeom $ buildBVH n $ (mkBoxed . MkAnyGeom) `fmap` triangles
@@ -238,7 +243,7 @@ type BoxedPartition a = (Boxed [Boxed a], Boxed [Boxed a])
 partitionBoxeds :: (Boxable a) => [Boxed a] -> [BoxedPartition a]
 partitionBoxeds []  = []
 partitionBoxeds [_] = []
-partitionBoxeds xs = map (\(a, b) -> (mkBoxed a, mkBoxed b)) $
+partitionBoxeds xs  = map (\(a, b) -> (mkBoxed a, mkBoxed b)) $
                      filter (\(a, b) -> not (null a)  &&  not (null b))
                         [partition (\b -> f3x (min b) < thresholdx) xs
                         ,partition (\b -> f3y (min b) < thresholdy) xs
@@ -272,15 +277,16 @@ bestPartition (p1:p2:ps) = if costOfPartition p1 < costOfPartition p2
 
 newtype RayTracer a = RT (State RayTraceState a)
     deriving (Monad, Functor)
-getRes    = RT $ gets stateRes
-getLights = RT $ gets stateLights
-getDepth  = RT $ gets stateDepth
-decDepth  = getDepth >>= (\d -> RT $ modify (\s -> s {stateDepth = d - 1}))
-getScene  = RT $ gets stateScene
-getRndGen = RT $ gets stateRndGen
-getCam    = RT $ gets stateCam
-setRndGen new = RT $ modify (\s -> s {stateRndGen = new})
+getRes     = RT $ gets stateRes
+getLights  = RT $ gets stateLights
+getAmbient = RT $ gets stateAmbient
+getDepth   = RT $ gets stateDepth
+decDepth   = getDepth >>= (\d -> RT $ modify (\s -> s {stateDepth = d - 1}))
+getScene   = RT $ gets stateScene
+getCam     = RT $ gets stateCam
 resetDepth = RT $ gets stateMaxDepth >>= \d -> modify (\s -> s {stateDepth = d})
+getRndGen  = RT $ gets stateRndGen
+setRndGen new = RT $ modify (\s -> s {stateRndGen = new})
 
 instance (Renderer RayTraceConfig) RayTracer where
     colorPixel = rayTrace
@@ -289,12 +295,13 @@ instance (Renderer RayTraceConfig) RayTracer where
 
 mkInitialState :: Scene -> RayTraceConfig -> RayTraceState
 mkInitialState scene conf =
-    RayTraceState internalScene lights depth rndGen res cam depth
+    RayTraceState internalScene lights ambient depth rndGen res cam depth
     where
         depth = confDepth conf
         rndGen = mkStdGen $ confSeed conf
         res = confRes conf
         cam = confCam conf
+        ambient = confAmbient conf
         internalScene = optimizeSceneGraph $ sGraph scene
         lights = sLights scene
 
@@ -322,11 +329,17 @@ getRandom = do
     setRndGen newGen
     return rand
 
+-- | Find the closest intersection of the ray with an intersectable. Only 
+-- intersections where the ray enters the objects from the outside (as 
+-- determined by the normal) are considered.
 intersectFirst :: AnyIntersectable -> Ray -> Maybe Intersection
 intersectFirst intersectable ray =
-    case intersect ray intersectable of
+    case filter correctSide $ intersect ray intersectable of
         []   -> Nothing
-        ints -> Just (minimum ints)
+        ints -> Just $ minimum ints
+        where
+            correctSide int = (rayDir ray) .*. (intNorm int) < 0
+            
 
 cameraRay :: Resolution -> Camera -> Pixel -> Ray
 cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
@@ -340,10 +353,10 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
         iFlt = fromIntegral i
         jFlt = fromIntegral j
         (u, v, w) = camUVW cam
-        top = tan ((camFovy cam) * pi / 360) -- theta/2
-        right = top * nxFlt / nyFlt
-        us = right * ((2*iFlt + 1)/nxFlt - 1)
-        vs =  top  * ((2*jFlt + 1)/nyFlt - 1)
+        halfHeight = tan ((camFovy cam) * pi / 360) -- tan(theta/2)
+        halfWidth  = halfHeight * nxFlt / nyFlt
+        us = halfWidth  * ((2*iFlt + 1)/nxFlt - 1) -- i == 0 => left
+        vs = halfHeight * (1 - (2*jFlt + 1)/nyFlt) -- j == 0 => top
         dir = normalize $ us*.u .+. vs*.v .-. w -- ws = -n = -1
 
 
@@ -385,9 +398,12 @@ colorMaterialType int Reflecting (ilDir, ilCol) =
 colorRay :: Ray -> RayTracer Color
 colorRay ray = do
     scene <- getScene
+    ambient <- getAmbient
     case (intersectFirst scene ray) of
-        Nothing -> return black --(r,g,b)
-        Just transfInt -> color transfInt
+        Nothing -> return black
+        Just intersection -> fmap (ambient .+.) $ color intersection
+        --Nothing -> return red
+        --Just int -> return white
 
 
 -- | (direction pointing *to* the lightsource, color of incident light)
@@ -456,6 +472,6 @@ rayTrace pixel = do
     res <- getRes -- TODO: getResolution from Renderer?
     cam <- getCam
     resetDepth
-    (colorRay . (cameraRay res cam) . (flipHoriz res)) pixel
+    (colorRay . (cameraRay res cam)) pixel
 
 -- vim: expandtab smarttab sw=4 ts=4

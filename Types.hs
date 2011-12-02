@@ -102,21 +102,23 @@ instance Geometry Triangle where
     intersectGeom (Triangle v1 v2 v3) ray@(Ray origin dir min max)
         -- | See pp206-208 of Fundamentals of Computer Graphics (Peter 
         -- Shirley, 2nd edition) for algorithm.
-        | m < smallest            = [] -- TODO: use epsilon to do relative compare?
-        | t < min   || t > max    = []
-        | beta < 0  || beta > 1   = []
-        | gamma < 0 || gamma > 1  = []
-        | otherwise               = [makeIntersection ray t n]
+--        | abs m < smallest              = [] -- TODO: use epsilon to do relative compare?
+        | t < min   || t > max          = []
+        | gamma < 0 || gamma > 1        = []
+        | beta < 0  || beta > 1 - gamma = []
+        | otherwise                     = [makeIntersection ray t n]
         where
             t     = -(f*(a*k - j*b) + e*(j*c - a*l) + d*(b*l - k*c)) / m
-            beta  = -(j*(e*i - h*f) + k*(g*f - d*i) + l*(d*h - e*g)) / m
+            beta  =  (j*(e*i - h*f) + k*(g*f - d*i) + l*(d*h - e*g)) / m
             gamma =  (i*(a*k - j*b) + h*(j*c - a*l) + g*(b*l - k*c)) / m
-            m     =   a*(e*i - h*f) + b*(j*c - a*l) + d*(b*l - k*c)
+            m     =   a*(e*i - h*f) + b*(g*f - d*i) + c*(d*h - e*g)
             F3 a b c = (vPos v1) .-. (vPos v2) -- 1st basis vector, for beta
             F3 d e f = (vPos v1) .-. (vPos v3) -- 2nd basis vector, for gamma
             F3 g h i = dir                     -- ray direction vector
             F3 j k l = (vPos v1) .-. origin    -- vector to travel
-            n = normalize $ (vNorm v1) .+. beta*.(vNorm v2) .+. gamma*.(vNorm v3)
+            alpha = 1 - beta - gamma
+            n = normalize $
+                alpha*.(vNorm v1) .+. beta*.(vNorm v2) .+. gamma*.(vNorm v3)
 
 data TriangleMesh = TriangleMesh [Triangle]
         deriving Show
@@ -141,7 +143,9 @@ instance Boxable Box where
     box = id
 
 instance Boxable Pt3 where
-    box p = Box p p
+    -- be careful with floating point precision!
+    box p = Box (p .-. eps) (p .+. eps)
+        where eps = epsilon *. (F3 1 1 1)
 
 instance (Boxable a, Boxable b) => Boxable (a, b) where
     box (a, b) = Box min max
@@ -167,21 +171,21 @@ instance Boxable Object where
 
 data CameraGaze = CameraGaze {
         cgPos  :: Pt3,
-        cgDir  :: UVec3,
-        cgUp   :: UVec3,
+        cgDir  :: Vec3,
+        cgUp   :: Vec3,
         cgFovy :: Flt -- ^ in degrees
     } deriving Show
 
 data Camera = Camera {
         camPos  :: Pt3,
-        camUVW  :: CoordSyst,
+        camUVW  :: CoordSyst, -- ^ w is the reverse of the looking direction
         camFovy :: Flt -- ^ in degrees
     } deriving Show
 
 camFromCamGaze :: CameraGaze -> Camera
 camFromCamGaze (CameraGaze pos dir up fovy) = Camera pos (u, v, w) fovy
     where
-        w = (-1::Flt) .*. dir
+        w = (-1) *. (normalize dir)
         u = normalize $ up .^. w
         v = w .^. u
 
@@ -227,13 +231,15 @@ flattenObjectGraph f initial (Node x subGraph) =
 
 type SceneGraph = ObjectGraph Transformation
 
-data Transformation = Translation Vec3
+data Transformation = Identity
+                    | Translation Vec3
                     | Rotation Vec3 Flt
                     | Scale Flt Flt Flt
                     deriving Show
 
 -- | Returns matrices for the normal and inverse transformation.
 transfoM4s :: Transformation -> (M4, M4)
+transfoM4s Identity              = (m4id, m4id)
 transfoM4s (Translation v)       = trans3M4s v
 transfoM4s (Rotation axis angle) = rotM4s axis angle
 transfoM4s (Scale x y z)         = scalexyzM4s x y z
@@ -247,6 +253,8 @@ data Scene = Scene {
 
 -- TODO: Pick proper convention (0 to res-1) or (1 to res) and check if 
 -- everything complies with this!
+-- | ( 0,  0) is the top left corner of the image
+-- | (nx, ny) is the bottom right corner of the image
 newtype Pixel = Pixel (Int, Int) deriving Show
 
 newtype Resolution = Resolution (Int, Int) deriving Show
