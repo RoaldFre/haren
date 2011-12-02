@@ -18,6 +18,7 @@ type Material = [MaterialComponent]
 
 
 
+-- TODO: STRICT?
 data Ray = Ray {
         rayOrigin :: Pt3,
         rayDir    :: Vec3, -- ^ *NOT* neccesarily normalised (eg for transformed rays)
@@ -25,13 +26,15 @@ data Ray = Ray {
         rayFar    :: Flt   -- ^ far clipping distance
     } deriving Show
 
+-- TODO: STRICT?
 data Intersection = Intersection {
         intPos  :: Pt3,     -- ^ Position of the intersection
         intDist :: Flt,     -- ^ Distance of intersecting ray
         intDir  :: Vec3,    -- ^ Direction of intersecting ray, *NOT* normalised
         intNorm :: UVec3,   -- ^ Normal vector of intersection surface, normalised
-	-- Note to self: Keep this as the last element to use some curry 
-	-- tricks. TODO clean?
+        -- intLocalPos :: Maybe Pt3 -- ^ Needed for texture mapping
+    -- Note to self: Keep intMat this as the last element to use some curry 
+    -- tricks. TODO nicer alternative?
         intMat  :: Material -- ^ Material of intersection surface
     } deriving Show
 
@@ -42,31 +45,31 @@ instance Ord Intersection where
 instance Eq Intersection where
     i1 == i2  =  intDist i1 == intDist i2
 
-
+makeIntersection :: Ray -> Flt -> UVec3 -> Material -> Intersection
+makeIntersection ray dist normal mat = 
+    Intersection (walk ray dist) dist (rayDir ray) normal mat
 
 
 
 class Geometry a where
     boundingBox :: a -> Box
-    intersect :: a -> Ray -> [Material -> Intersection]
+    intersectGeom :: a -> Ray -> [Material -> Intersection]
 
 -- Existential geometry
-data AnyGeom = forall a . Geometry a => MkAnyGeom a
+data AnyGeom = forall a . (Geometry a, Show a) => MkAnyGeom a
 instance Geometry AnyGeom where
     boundingBox (MkAnyGeom g) = boundingBox g
-    intersect (MkAnyGeom g) = intersect g
+    intersectGeom (MkAnyGeom g) = intersectGeom g
 instance Show AnyGeom where
-    show (MkAnyGeom geom) = "AnyGeom TODO" -- TODO
+    show (MkAnyGeom geom) = "AnyGeom " ++ show geom
 
 
 -- | Sphere with radius 1 at origin
-data Sphere = Sphere
-
-
+data Sphere = Sphere deriving Show
 
 instance Geometry Sphere where
     boundingBox Sphere = Box (F3 (-1) (-1) (-1)) (F3 1 1 1)
-    intersect Sphere ray@(Ray e d min max) =
+    intersectGeom Sphere ray@(Ray e d min max) =
         [makeIntersection ray t (sphereNormal t) | t <- ts, min < t, t < max]
         where
             ts = solveQuadEq
@@ -86,10 +89,6 @@ solveQuadEq a b c
 walk :: Ray -> Flt -> Pt3
 walk ray dist = (rayOrigin ray) .+. (rayDir ray) .* dist
 
-makeIntersection :: Ray -> Flt -> UVec3 -> Material -> Intersection
-makeIntersection ray dist normal mat = 
-    Intersection (walk ray dist) dist (rayDir ray) normal mat
-
 data Vertex = Vertex {
         vPos  :: !Pt3,
         vNorm :: !UVec3
@@ -97,10 +96,34 @@ data Vertex = Vertex {
 
 data Triangle = Triangle !Vertex !Vertex !Vertex  -- ^ Triangle with the given vertices
         deriving Show
+
+instance Geometry Triangle where
+    boundingBox (Triangle v1 v2 v3) = box $ map vPos [v1, v2, v3]
+    intersectGeom (Triangle v1 v2 v3) ray@(Ray origin dir min max)
+        -- | See pp206-208 of Fundamentals of Computer Graphics (Peter 
+        -- Shirley, 2nd edition) for algorithm.
+        | m < smallest            = [] -- TODO: use epsilon to do relative compare?
+        | t < min   || t > max    = []
+        | beta < 0  || beta > 1   = []
+        | gamma < 0 || gamma > 1  = []
+        | otherwise               = [makeIntersection ray t n]
+        where
+            t     = -(f*(a*k - j*b) + e*(j*c - a*l) + d*(b*l - k*c)) / m
+            beta  = -(j*(e*i - h*f) + k*(g*f - d*i) + l*(d*h - e*g)) / m
+            gamma =  (i*(a*k - j*b) + h*(j*c - a*l) + g*(b*l - k*c)) / m
+            m     =   a*(e*i - h*f) + b*(j*c - a*l) + d*(b*l - k*c)
+            F3 a b c = (vPos v1) .-. (vPos v2) -- 1st basis vector, for beta
+            F3 d e f = (vPos v1) .-. (vPos v3) -- 2nd basis vector, for gamma
+            F3 g h i = dir                     -- ray direction vector
+            F3 j k l = (vPos v1) .-. origin    -- vector to travel
+            n = normalize $ (vNorm v1) .+. beta*.(vNorm v2) .+. gamma*.(vNorm v3)
+
 data TriangleMesh = TriangleMesh [Triangle]
         deriving Show
 
-
+--instance Geometry TriangleMesh where
+--only use accelerated structure for boundingBox and intersect, still make 
+--it a geometry later on for rasterizing, though.
 
 data Object = Object AnyGeom Material deriving Show
 

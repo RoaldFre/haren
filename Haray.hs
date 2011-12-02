@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, DeriveFunctor, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, DeriveFunctor, TypeSynonymInstances, FlexibleInstances, ExistentialQuantification #-}
 
 module Haray where
 --module Haray (RayTraceConfig (..), RayTracer, rayTrace) where
@@ -26,7 +26,7 @@ data RayTraceConfig = RayTraceConfig {
     } deriving Show
 
 data RayTraceState = RayTraceState {
-        stateScene  :: SceneStructure,
+        stateScene  :: AnyIntersectable,
         stateLights :: [Light],
         stateDepth  :: Int,
         stateRndGen :: StdGen, -- ^ Random number generator
@@ -42,7 +42,7 @@ data Transformed a = Transformed {
         tTrans    :: M4,
         tInvTrans :: M4,
         tOriginal :: a
-    } deriving Show
+    } deriving (Show, Functor)
 
 instance (Ord a) => Ord (Transformed a) where
     t1 <= t2  =  (tOriginal t1) <= (tOriginal t2)
@@ -53,22 +53,22 @@ instance (Eq a) => Eq (Transformed a) where
 -- | tTrans is here the transformation that should be applied to the object
 type TransformedObj = Transformed Object
 
--- | Two representations of the same Interesection: One in local 
--- coordinates of the (transformed) object, and one in global coordinates.
-data Ints = Ints {localInt  :: Intersection,
-                  globalInt :: Intersection}
-instance Ord Ints where
-    i1 <= i2  =  (localInt i1) <= (localInt i2)
-instance Eq Ints where
-    i1 == i2  =  (localInt i1) == (localInt i2)
--- Prerequisite for Ord...
 
--- | The contained local intersection is the result of intersecting an 
--- 'original' object with the inverse transformed (tInvTrans) ray. The 
--- contained global intersection is this local intersection transformed 
--- according to how the 'original' object should be transformed (thus via 
--- tTrans).
-type TransformedInts = Transformed Ints
+transformRay :: M4 -> Ray -> Ray
+transformRay trans (Ray origin direction near far) =
+    Ray (trans `multPt` origin) (trans `multVec` direction) near far
+
+transformInt :: Pt3 -> (M4, M4) -> Intersection -> Intersection
+transformInt originalOrigin (trans, invTrans) int =
+    int {intDir = newDir, intPos = newPos, intNorm = newNorm}
+    where 
+        newDir = trans `multVec` (intDir int)
+        --newPos = trans `multPt` (intPos int),
+        newPos = originalOrigin .+. (newDir .* intDist int) 
+        newNorm = normalize $ (transpose invTrans) `multVec` (intNorm int)
+
+
+
 
 
 instance Boxable TransformedObj where
@@ -92,6 +92,7 @@ flattenSceneGraph sceneGraph =
         matricesGraph = transfoM4s `fmap` sceneGraph
 
 -- | Store the precomputed bounding box -> O(1) retrieval time
+-- TODO THIS NEEDS TO BE/HAVE A CLASS (and immediately put hitsBoxed in here) [?]
 data Boxed a = Boxed {
         thebox :: !Box,
         unbox  :: a
@@ -126,29 +127,34 @@ instance (Boxable a) => Boxable (BVH a) where
     box (BVHleaf b) = box b
     box (BVHnode b1 b2) = box (b1, b2)
 
-type SceneStructure = BVH TransformedObj
+
+-- for optimizing a single geometry
+instance (Geometry a) => Geometry (BVH a) where
+    boundingBox (BVHleaf b) = box b
+    boundingBox (BVHnode b1 b2) = box (b1, b2)
+
+    intersectGeom bvh ray = concatMap (\g -> intersectGeom g ray) $ bvhPotentialHits ray bvh
 
 
-
-
--- | Get a list of objects that are potentially intersected with the given 
+-- | Returns a list of all elements whose bounding box got hit by the given 
 -- ray.
 -- TODO: I'm not testing if I won't hit with the *entire* bvh alltogether 
--- (== slight performance drop for small trees)
-candidateObjects :: Ray -> BVH a -> [a]
-candidateObjects ray (BVHleaf b) = map unbox $ filter (ray `hitsBoxed`) b
-candidateObjects ray (BVHnode b1@(Boxed _ _) b2@(Boxed _ _)) =
-    concatMap (candidateObjects ray . unbox) $ filter (ray `hitsBoxed`) [b1, b2]
+-- (== potentially slight performance drop for small, 'dense' trees)
+bvhPotentialHits :: Ray -> BVH a -> [a]
+bvhPotentialHits ray (BVHleaf b) = map unbox $ filter (ray `hitsBoxed`) b
+bvhPotentialHits ray (BVHnode b1@(Boxed _ _) b2@(Boxed _ _)) = -- TODO what is this Boxed mess again?
+    concatMap (bvhPotentialHits ray . unbox) $ filter (ray `hitsBoxed`) [b1, b2]
 
 hitsBoxed :: Ray -> Boxed a -> Bool
 ray `hitsBoxed` boxed = ray `hitsBox` (box boxed)
 
--- TODO: make this beautiful, loose the ugly imperative code! ;P
+-- TODO: make this beautiful, loose the ugly imperative feel! ;P
 hitsBox :: Ray -> Box -> Bool
-ray `hitsBox` (Box p1 p2) = 
-    if       tfar1 < tnear1   ||  tfar1 < 0  then False
-    else  if tfar2 < tnear2   ||  tfar2 < 0  then False
-        else tfar3 >= tnear2  &&  tfar2 >= 0
+ray `hitsBox` (Box p1 p2)
+    | tfar1 < tnear1   ||  tfar1 < 0  =  False
+    | tfar2 < tnear2   ||  tfar2 < 0  =  False
+    | tfar3 < tnear3   ||  tfar3 < 0  =  False
+    | otherwise                       =  True
     where
         distFromSlabs (dir, bound1, bound2) = if t1 < t2 then (t1, t2) else (t2, t1)
             where
@@ -163,23 +169,64 @@ ray `hitsBox` (Box p1 p2) =
         (tnear2, tfar2) = shrink (tnear1, tfar1) dists2
         (tnear3, tfar3) = shrink (tnear2, tfar2) dists3
 
+
+
+
+-- | Top level class of all possible things that are intersectable. This 
+-- can be individual objects, but also entire scenes.
+class Intersectable a where
+    intersect :: Ray -> a -> [Intersection]
+
+-- Existential intersectable (i11e cfr i18n: intersectable is too long to 
+-- type and fucks up formatting :P)
+data AnyIntersectable = forall a . (Intersectable a, Show a) => MkAnyI11e a
+instance Intersectable AnyIntersectable where
+    intersect ray (MkAnyI11e intersectable) = intersect ray intersectable
+instance Show AnyIntersectable where
+    show (MkAnyI11e intersectable) = "AnyI11e " ++ show intersectable
+
+instance Intersectable Object where
+    intersect ray (Object geom mat) = map (\x -> x mat) $ intersectGeom geom ray
+
+instance Intersectable TransformedObj where
+    intersect ray (Transformed trans invTrans obj) = globalInts
+     where
+        localInts = intersect (transformRay invTrans ray) obj
+        globalInts = map (transformInt (rayOrigin ray) (trans, invTrans)) localInts
+
+-- for optimizing an entire scene
+instance (Intersectable a) => Intersectable (BVH a) where
+    intersect ray bvh = concatMap (intersect ray) $ bvhPotentialHits ray bvh
+
+
+
+
+{-
 sceneGraphToInternalStructure :: SceneGraph -> SceneStructure
-sceneGraphToInternalStructure = buildBVH . (fmap mkBoxed) . flattenSceneGraph
+sceneGraphToInternalStructure = (buildBVH 1) . (fmap mkBoxed) . flattenSceneGraph
+-}
+
+-- | Optimize the given scenegraph for raytracing.
+optimizeSceneGraph :: SceneGraph -> AnyIntersectable
+optimizeSceneGraph = MkAnyI11e . (buildBVH 1) . (fmap mkBoxed) . flattenSceneGraph
+
+optimizeTriangleMesh:: Int -> TriangleMesh -> AnyGeom
+optimizeTriangleMesh n (TriangleMesh triangles) =
+    MkAnyGeom $ buildBVH n $ (mkBoxed . MkAnyGeom) `fmap` triangles
 
 
 -- | Build a Bounding Volume Hierarchy (top-down) from the list of boxables.
--- This will keep partitioning until there is only one element in each 
+-- This will keep partitioning until there are at most 'n' elements in each 
 -- leaf. In the pathological case where it is impossible to partition a 
--- list further (eg when it holds two items with the exact same box), then 
--- that list will be put in a leaf in its entirety.
-buildBVH :: (Boxable a) => [Boxed a] -> BVH a
--- Just bunched together, no tree:
--- buildBVH xs = BVHleaf xs
-buildBVH [] = error "Can't make a BVH from nothing!" -- TODO "Maybe"? --TODO will give error on empty partition!!
-buildBVH [x] = BVHleaf [x]
-buildBVH xs = case bestPartition $ partitionBoxeds xs of
-    Nothing       -> BVHleaf xs
-    Just (p1, p2) -> BVHnode (buildBVH <$> p1) (buildBVH <$> p2)
+-- list further (eg when it holds more than 'n' items with the exact same 
+-- box), then that list will be put in a leaf in its entirety.
+buildBVH :: (Boxable a) => Int -> [Boxed a] -> BVH a
+--buildBVH _ [] = error "Can't make a BVH from nothing!"
+buildBVH n xs
+   | length xs <= n = BVHleaf xs
+   | otherwise = case bestPartition $ partitionBoxeds xs of
+        Nothing       -> BVHleaf xs
+        Just (p1, p2) -> BVHnode (buildBVH n <$> p1) (buildBVH n <$> p2)
 
 -- | A partition of a bunch of boxeds, each part wrapped in a boxed itself
 type BoxedPartition a = (Boxed [Boxed a], Boxed [Boxed a])
@@ -242,13 +289,13 @@ instance (Renderer RayTraceConfig) RayTracer where
 
 mkInitialState :: Scene -> RayTraceConfig -> RayTraceState
 mkInitialState scene conf =
-    RayTraceState sceneStructure lights depth rndGen res cam depth
+    RayTraceState internalScene lights depth rndGen res cam depth
     where
         depth = confDepth conf
         rndGen = mkStdGen $ confSeed conf
         res = confRes conf
         cam = confCam conf
-        sceneStructure = sceneGraphToInternalStructure $ sGraph scene
+        internalScene = optimizeSceneGraph $ sGraph scene
         lights = sLights scene
 
 
@@ -275,41 +322,11 @@ getRandom = do
     setRndGen newGen
     return rand
 
-intersectFirst :: SceneStructure -> Ray -> Maybe TransformedInts
-intersectFirst scene ray =
-    case intersectWith ray scene of
+intersectFirst :: AnyIntersectable -> Ray -> Maybe Intersection
+intersectFirst intersectable ray =
+    case intersect ray intersectable of
         []   -> Nothing
         ints -> Just (minimum ints)
-
-
-intersectWith :: Ray -> SceneStructure -> [TransformedInts]
-intersectWith ray scene = concatMap (intersectWith1 ray) objs
-    where objs = candidateObjects ray scene
-
-intersectWith1 :: Ray -> TransformedObj -> [TransformedInts]
-intersectWith1 ray (Transformed trans invTrans obj) =
-    map (\(li,gi) -> Transformed trans invTrans (Ints li gi)) ints
-    where
-        localInts = intersectWithObject (transformRay invTrans ray) obj
-        globalInts = map (transformInt (rayOrigin ray) (trans, invTrans)) localInts
-        ints = zip localInts globalInts
-
-transformRay :: M4 -> Ray -> Ray
-transformRay trans (Ray origin direction near far) =
-    Ray (trans `multPt` origin) (trans `multVec` direction) near far
-
-transformInt :: Pt3 -> (M4, M4) -> Intersection -> Intersection
-transformInt originalOrigin (trans, invTrans) int =
-    int {intDir = newDir, intPos = newPos, intNorm = newNorm}
-    where 
-        newDir = trans `multVec` (intDir int)
-        --newPos = trans `multPt` (intPos int),
-        newPos = originalOrigin .+. (newDir .* intDist int) 
-        newNorm = normalize $ (transpose invTrans) `multVec` (intNorm int)
-
-intersectWithObject :: Ray -> Object -> [Intersection]
-intersectWithObject ray (Object obj mat) = map (\x -> x mat) $ intersect obj ray
-
 
 cameraRay :: Resolution -> Camera -> Pixel -> Ray
 cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
@@ -331,47 +348,37 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
 
 
 -- | Calculate the Color of the given Intersection
-color :: TransformedInts -> RayTracer Color
-color transInts =
+color :: Intersection -> RayTracer Color
+color int = foldlM (addWeightedPureColor int) black (intMat int)
 --TODO STRICT//seq?
-    foldlM (addWeightedPureColor transInts) black (intMat $ getLocalInt transInts)
 
-addWeightedPureColor :: TransformedInts -> Color -> MaterialComponent -> RayTracer Color
-addWeightedPureColor transInt col (MaterialComponent (weight, pureMat)) = do
-    incidentLight <- incidentDirectLight (globalInt)
-    pureCol <- colorPure transInt incidentLight pureMat
+addWeightedPureColor :: Intersection -> Color -> MaterialComponent -> RayTracer Color
+addWeightedPureColor int col (MaterialComponent (weight, pureMat)) = do
+    incidentLight <- incidentDirectLight int
+    pureCol <- colorPure int incidentLight pureMat
     return $ col  .+.  weight *. pureCol
-    where Ints _ globalInt = tOriginal transInt
 
 -- | Calculate the Color of a PureMaterial under the given light at a given 
 -- Intersection
-colorPure :: TransformedInts -> [IncidentLight] -> PureMaterial -> RayTracer Color
-colorPure transInt incidentLights pureMat@(PureMaterial matType matCol) = do
-    contributions <- mapM (colorMaterialType transInt matType) incidentLights
+colorPure :: Intersection -> [IncidentLight] -> PureMaterial -> RayTracer Color
+colorPure int incidentLights pureMat@(PureMaterial matType matCol) = do
+    contributions <- mapM (colorMaterialType int matType) incidentLights
     let total = foldl' (.+.) black contributions
     return $ matCol .***. total 
 
-getGlobalInt :: TransformedInts -> Intersection
-getGlobalInt = globalInt . tOriginal
-
-getLocalInt :: TransformedInts -> Intersection
-getLocalInt = localInt . tOriginal
-
-colorMaterialType :: TransformedInts -> MaterialType -> IncidentLight -> RayTracer Color
-colorMaterialType transInts Diffuse (ilDir, ilCol) =
-    return $ ilCol .* (ilDir .*. (intNorm $ getGlobalInt transInts))
-colorMaterialType transInts (Phong p) (ilDir, ilCol) =
+colorMaterialType :: Intersection -> MaterialType -> IncidentLight -> RayTracer Color
+colorMaterialType int Diffuse (ilDir, ilCol) =
+    return $ ilCol .* (ilDir .*. (intNorm int))
+colorMaterialType int (Phong p) (ilDir, ilCol) =
     return $ ilCol .* ((h .*. n) ** p)
     where
         n = intNorm int
         h = normalize $ ilDir .-. (intDir int)
-        int = getGlobalInt transInts
-colorMaterialType transInts Reflecting (ilDir, ilCol) =
+colorMaterialType int Reflecting (ilDir, ilCol) =
     black `orRecurseOn` ((ilCol .***.) <$> (colorRay ray))
     where
-        ray = Ray (intPos globInt) reflectedDir epsilon infinity
-        reflectedDir = reflect (intDir globInt) (intNorm globInt)
-        globInt = getGlobalInt transInts
+        ray = Ray (intPos int) reflectedDir epsilon infinity
+        reflectedDir = reflect (intDir int) (intNorm int)
     --TODO attenuation?
 
 
@@ -431,9 +438,9 @@ spawnShadowRaysFromType (Softbox lightPos) point =
 -- | Propagate the given ray from the given light through the scene. Return 
 -- the resulting incident light of the lightray, or Nothing if it is 
 -- blocked.
-propagateShadowRay :: SceneStructure -> Light -> Ray -> Maybe IncidentLight
+propagateShadowRay :: AnyIntersectable -> Light -> Ray -> Maybe IncidentLight
 propagateShadowRay scene light ray =
-    case (intersectWith ray scene) of
+    case (intersect ray scene) of
         [] -> Just (normalize (rayDir ray), color)
         _  -> Nothing
     where
