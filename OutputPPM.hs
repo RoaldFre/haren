@@ -11,14 +11,14 @@ renderPPM fileName scene conf = writeFile fileName $ run scene conf renderPPMstr
 
 renderPPMstr :: (Renderer c m) => m String
 renderPPMstr = do
-    res@(Resolution (nx, _)) <- getResolution
-    massiveString <- unlines <$> mapM renderRow [0 .. nx-1]
+    res@(Resolution (_, ny)) <- getResolution
+    massiveString <- unlines <$> mapM renderRow [0 .. ny-1]
     return $ headerPPM res ++ "\n" ++ massiveString
 
 renderRow :: (Renderer c m) => Int -> m String
 renderRow row = do
-    Resolution (_, ny) <- getResolution
-    colorRow <- mapM colorPixel [Pixel (row, j) | j <- [0 .. ny-1]]
+    Resolution (nx, _) <- getResolution
+    colorRow <- mapM colorPixel [Pixel (j, row) | j <- [0 .. nx-1]]
     return $ unwords $ map colorToPPM colorRow
 
 headerPPM :: Resolution -> String

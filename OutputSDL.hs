@@ -32,7 +32,7 @@ renderSDL renderMode scene conf = do
 renderSDLactions :: (Renderer c m) => RenderMode -> Surface -> m [IO ()]
 renderSDLactions renderMode screen  = do
     res@(Resolution (nx, ny)) <- getResolution
-    let pixels = [Pixel (i, j) | j <- [0 .. ny - 1], i <- [0 .. nx - 1]]
+    let pixels = [Pixel (i, j) | j <- [0 .. nx - 1], i <- [0 .. ny - 1]]
     putPixelActions <- mapM pixToPutPix pixels
     let n = chunkSize renderMode res
     return $ sprinkle n [SDL.flip screen, pollForQuit] putPixelActions
