@@ -64,7 +64,7 @@ objFileParserTest = do
 
 objFileParser :: ObjParser s TriangleMesh
 objFileParser = do
-    skipMany $ normal <|> vertex <|> face <|> ignoreLine
+    skipMany $ normal <|> texture <|> vertex <|> face <|> ignoreLine
     eof
     st <- getState
     return $ TriangleMesh $ stTriangles st
@@ -86,6 +86,12 @@ normal = do
    z <- spaces1 >> float
    optional spaces1 >> eolf
    addNormal $ normalize $ F3 x y z
+
+-- | Texture coordinates are skipped (for now).
+texture :: ObjParser s ()
+texture = do
+   _ <- try $ string "vt"
+   ignoreLine
 
 
 vertex :: ObjParser s ()
@@ -132,8 +138,6 @@ addTriangle triangle = do
     setState $ st {stTriangles = triangle : triangles}
     
 
-
-    
 -- | Parses expression of the form "int1", "int1/int2" or 
 -- "int1/int2/int3", where int2 is optional in the last expression.
 slashedInts :: ObjParser s (Int, Maybe Int, Maybe Int)
