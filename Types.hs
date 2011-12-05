@@ -4,6 +4,7 @@ module Types where
 
 import Math
 import Data.List hiding (intersect)
+import Data.Ix
 
 
 data MaterialType = Diffuse
@@ -18,15 +19,13 @@ type Material = [MaterialComponent]
 
 
 
--- TODO: STRICT?
 data Ray = Ray {
-        rayOrigin :: Pt3,
-        rayDir    :: Vec3, -- ^ *NOT* neccesarily normalised (eg for transformed rays)
-        rayNear   :: Flt,  -- ^ near clipping distance
-        rayFar    :: Flt   -- ^ far clipping distance
+        rayOrigin :: !Pt3,
+        rayDir    :: !Vec3, -- ^ *NOT* neccesarily normalised (eg for transformed rays)
+        rayNear   :: !Flt,  -- ^ near clipping distance
+        rayFar    :: !Flt   -- ^ far clipping distance
     } deriving Show
 
--- TODO: STRICT?
 data Intersection = Intersection {
         intPos  :: Pt3,     -- ^ Position of the intersection
         intDist :: Flt,     -- ^ Distance of intersecting ray
@@ -99,6 +98,7 @@ data Triangle = Triangle !Vertex !Vertex !Vertex  -- ^ Triangle with the given v
 
 instance Geometry Triangle where
     boundingBox (Triangle v1 v2 v3) = box $ map vPos [v1, v2, v3]
+{-
     intersectGeom (Triangle v1 v2 v3) ray@(Ray origin dir min max)
         -- | See pp206-208 of Fundamentals of Computer Graphics (Peter 
         -- Shirley, 2nd edition) for algorithm.
@@ -119,13 +119,51 @@ instance Geometry Triangle where
             alpha = 1 - beta - gamma
             n = normalize $
                 alpha*.(vNorm v1) .+. beta*.(vNorm v2) .+. gamma*.(vNorm v3)
+-}
+--TODO: this code is too slow: :-(
+--{-
+    intersectGeom (Triangle v1 v2 v3) ray@(Ray e d min max)
+        -- | See pp206-208 of Fundamentals of Computer Graphics (Peter 
+        -- Shirley, 2nd edition) for algorithm.
+--        | abs m < smallest              = [] -- TODO: use epsilon to do relative compare?
+        | t < min   || t > max          = []
+        | gamma < 0 || gamma > 1        = []
+        | beta < 0  || beta > 1 - gamma = []
+        | otherwise                     = [makeIntersection ray t n]
+        where
+            -- e + t*d = o + beta*(-d1) + gamma*(-d2)
+            F3 t beta gamma = solve3x3 (M3 d d1 d2) diff
+            d1 = (vPos v1) .-. (vPos v2) -- (inverse of) 1st basis vector, for beta
+            d2 = (vPos v1) .-. (vPos v3) -- (inverse of) 2nd basis vector, for gamma
+            diff = (vPos v1) .-. e -- vector to travel
+            alpha = 1 - beta - gamma
+            n = normalize $
+                alpha*.(vNorm v1) .+. beta*.(vNorm v2) .+. gamma*.(vNorm v3)
+---}
 
-data TriangleMesh = TriangleMesh [Triangle]
-        deriving Show
+data TriangleMesh = TriangleMesh [Triangle] deriving Show
 
 --instance Geometry TriangleMesh where
 --only use accelerated structure for boundingBox and intersect, still make 
---it a geometry later on for rasterizing, though.
+--it a geometry later on for rasterizing, though. <- TODO
+
+-- | A two-sided plane.
+-- Plane origin direction1 direction2 normal
+data Plane = Plane Pt3 Vec3 Vec3 UVec3 deriving Show
+mkPlane :: Pt3 -> Vec3 -> Vec3 -> Plane
+mkPlane origin dir1 dir2 = Plane origin dir1 dir2 $ normalize $ dir1 .^. dir2
+       
+instance Geometry Plane where
+    boundingBox (Plane o d1 d2 _) = box [o, o.+.d1, o.+.d2, o.+.d1.+.d2]
+    intersectGeom (Plane o d1 d2 normal) ray@(Ray e d min max)
+        | t < min   || t > max   = []
+        | gamma < 0 || gamma > 1 = []
+        | beta < 0  || beta > 1  = []
+        | otherwise              = [makeIntersection ray t n | n <- ns]
+        where
+            -- e + t*d = o + beta*d1 + gamma*d2
+            F3 t beta gamma = solve3x3 (M3 ((-1)*.d) d1 d2) (e .-. o)
+            ns = [normal, (-1)*.normal]
 
 data Object = Object AnyGeom Material deriving Show
 
@@ -133,8 +171,8 @@ data Object = Object AnyGeom Material deriving Show
 --implement Boxable, and geometry is defined here, so that's not *that* 
 --nice imo
 
--- | Axis aligned box. -- TODO: strict in points?
-data Box = Box Pt3 Pt3 deriving Show
+-- | Axis aligned box.
+data Box = Box !Pt3 !Pt3 deriving Show
 
 class Boxable a where
     box :: a -> Box -- ^ Surrounding box for 'a'
@@ -255,12 +293,20 @@ data Scene = Scene {
 -- everything complies with this!
 -- | ( 0,  0) is the top left corner of the image
 -- | (nx, ny) is the bottom right corner of the image
-newtype Pixel = Pixel (Int, Int) deriving Show
+newtype Pixel = Pixel (Int, Int) deriving (Show, Ord, Eq, Ix)
+
+pixToPt :: Pixel -> Pt2
+pixToPt (Pixel (x, y)) = F2 (fromIntegral x) (fromIntegral y)
 
 newtype Resolution = Resolution (Int, Int) deriving Show
 
 -- | Lazy RGB triplet, components in the range [0..1].
-data Color = Color Flt Flt Flt
+-- TODO make strict anyway?
+data Color = Color {
+        cRed   :: Flt,
+        cGreen :: Flt,
+        cBlue  :: Flt
+    }
 
 instance (NumTuple Flt) Color where
     tupleToList (Color r g b) = [r, g, b]
@@ -268,7 +314,7 @@ instance (NumTuple Flt) Color where
 instance Show Color where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
 instance Mult Color Color Flt where
-    (.*.) = dot -- TODO: this is a bit contrived and probably not really needed
+    (.*.) = dot
 instance Mult Color Flt Color where (.*.) = (.*)
 instance Mult Flt Color Color where (.*.) = (*.)
 instance Div Color Flt

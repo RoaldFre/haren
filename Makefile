@@ -10,9 +10,11 @@ OPTS_LLVM_AGRESSIVE=-fllvm -optlo-basicaa -optlo-basiccg -optlo-count-aa -optlo-
 
 BACKEND_OPTS=${OPTS_LLVM_BASIC}
 
-OPTS=-Odph -O2 -rtsopts -threaded -funbox-strict-fields -fexcess-precision -funfolding-use-threshold=1000 -funfolding-creation-threshold=1000 -fspec-constr-count=64 -fspec-constr-threshold=1000 -static ${BACKEND_OPTS}
+COMMON_OPTS=-rtsopts -threaded -funbox-strict-fields -fexcess-precision -fmax-worker-args=40
 
-OPTS_QUICK=-O2 -rtsopts -threaded -funbox-strict-fields -funfolding-use-threshold=200 
+OPTS=${COMMON_OPTS} -funfolding-use-threshold=1000 -funfolding-creation-threshold=1000 -fspec-constr-count=64 -fspec-constr-threshold=1000 ${BACKEND_OPTS}
+
+OPTS_QUICK=${COMMON_OPTS} -O2 -funfolding-use-threshold=200 -funfolding-creation-threshold=200
 
 main:
 	ghc ${OPTS_QUICK} --make Main

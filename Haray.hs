@@ -1,7 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, DeriveFunctor, TypeSynonymInstances, FlexibleInstances, ExistentialQuantification #-}
 
-module Haray where
---module Haray (RayTraceConfig (..), RayTracer, rayTrace) where
+--module Haray where
+module Haray (RayTraceConfig (..), RayTracer, rayTrace, optimizeTriangleMesh) where
 
 import Types
 import Math
@@ -26,6 +26,7 @@ data RayTraceConfig = RayTraceConfig {
         confAmbient :: Color
     } deriving Show
 
+-- TODO: make (some of) these strict?
 data RayTraceState = RayTraceState {
         stateScene    :: AnyIntersectable,
         stateLights   :: [Light],
@@ -144,11 +145,12 @@ instance (Geometry a) => Geometry (BVH a) where
 -- (== potentially slight performance drop for small, 'dense' trees)
 bvhPotentialHits :: Ray -> BVH a -> [a]
 bvhPotentialHits ray (BVHleaf b) = map unbox $ filter (ray `hitsBoxed`) b
-bvhPotentialHits ray (BVHnode b1@(Boxed _ _) b2@(Boxed _ _)) = -- TODO what is this Boxed mess again?
+bvhPotentialHits ray (BVHnode b1 b2) =
     concatMap (bvhPotentialHits ray . unbox) $ filter (ray `hitsBoxed`) [b1, b2]
 
 hitsBoxed :: Ray -> Boxed a -> Bool
 ray `hitsBoxed` boxed = ray `hitsBox` (box boxed)
+--ray `hitsBoxed` boxed = True -- DEBUG
 
 -- TODO: make this beautiful, loose the ugly imperative feel! ;P
 hitsBox :: Ray -> Box -> Bool
@@ -158,14 +160,14 @@ ray `hitsBox` (Box p1 p2)
     | tfar3 < tnear3   ||  tfar3 < 0  =  False
     | otherwise                       =  True
     where
-        distFromSlabs (dir, bound1, bound2) = if t1 < t2 then (t1, t2) else (t2, t1)
+        distFromSlabs dir bound1 bound2 = if t1 < t2 then (t1, t2) else (t2, t1)
             where
                 t1 = bound1 / dir
                 t2 = bound2 / dir
-        dirP1P2 = zip3 (tupleToList (rayDir ray)) 
-                       (tupleToList (p1 .-. rayOrigin ray))
-                       (tupleToList (p2 .-. rayOrigin ray))
-        [dists1, dists2, dists3] = map distFromSlabs dirP1P2
+        [dists1, dists2, dists3] = zipWith3 distFromSlabs 
+                                       (tupleToList (rayDir ray)) 
+                                       (tupleToList (p1 .-. rayOrigin ray))
+                                       (tupleToList (p2 .-. rayOrigin ray))
         shrink (x,y) (a,b) = (maximum [x,a], minimum [y,b])
         (tnear1, tfar1) = shrink (rayNear ray, rayFar ray) dists1
         (tnear2, tfar2) = shrink (tnear1, tfar1) dists2
@@ -217,7 +219,7 @@ optimizeSceneGraph = MkAnyI11e . (buildBVH 1) . (fmap mkBoxed) . flattenSceneGra
 -- triangles.
 optimizeTriangleMesh:: Int -> TriangleMesh -> AnyGeom
 optimizeTriangleMesh n (TriangleMesh triangles) =
-    MkAnyGeom $ buildBVH n $ (mkBoxed . MkAnyGeom) `fmap` triangles
+    MkAnyGeom $! buildBVH n $ (mkBoxed . MkAnyGeom) `fmap` triangles
 
 
 -- | Build a Bounding Volume Hierarchy (top-down) from the list of boxables.
@@ -329,6 +331,14 @@ getRandom = do
     setRndGen newGen
     return rand
 
+getRandomRs :: Random a => Int -> (a, a) -> RayTracer [a]
+getRandomRs n range = do
+    gen <- getRndGen
+    let (newGen, gen') = split gen
+    setRndGen newGen
+    return $ take n $ randomRs range gen'
+    
+
 -- | Find the closest intersection of the ray with an intersectable. Only 
 -- intersections where the ray enters the objects from the outside (as 
 -- determined by the normal) are considered.
@@ -362,12 +372,14 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
 
 -- | Calculate the Color of the given Intersection
 color :: Intersection -> RayTracer Color
-color int = foldlM (addWeightedPureColor int) black (intMat int)
+color int = do
+    incidentLight <- incidentDirectLight int
+    foldlM (addWeightedPureColor int incidentLight) black (intMat int)
 --TODO STRICT//seq?
 
-addWeightedPureColor :: Intersection -> Color -> MaterialComponent -> RayTracer Color
-addWeightedPureColor int col (MaterialComponent (weight, pureMat)) = do
-    incidentLight <- incidentDirectLight int
+addWeightedPureColor :: Intersection -> [IncidentLight] -> Color -> MaterialComponent -> RayTracer Color
+--TODO, make this strict in its argument, and/or return strict?
+addWeightedPureColor int incidentLight col (MaterialComponent (weight, pureMat)) = do
     pureCol <- colorPure int incidentLight pureMat
     return $ col  .+.  weight *. pureCol
 
@@ -424,33 +436,31 @@ incidentDirectLight int = do
 incidentDirectLight1 :: Intersection -> Light -> RayTracer [IncidentLight]
 incidentDirectLight1 int light = do
     scene <- getScene
+    allRays <- spawnShadowRays light (intPos int)
+    let shadowRays = filter correctSide allRays
     return $ mapMaybe (propagateShadowRay scene light) shadowRays
     where
-        allRays = spawnShadowRays light (intPos int)
-        shadowRays = filter correctSide allRays
         correctSide ray = (rayDir ray) .*. (intNorm int) > 0
     
 -- | Spawn Rays from the given point to the given light.
-spawnShadowRays :: Light -> Pt3 -> [Ray]
+spawnShadowRays :: Light -> Pt3 -> RayTracer [Ray]
 spawnShadowRays (Light lightType _) point = spawnShadowRaysFromType lightType point
 
-spawnShadowRaysFromType :: LightType -> Pt3 -> [Ray]
-spawnShadowRaysFromType (PointSource lightPos) point = [ray]
+spawnShadowRaysFromType :: LightType -> Pt3 -> RayTracer [Ray]
+spawnShadowRaysFromType (PointSource lightPos) point = return [ray]
     where
         diff = lightPos .-. point
         distance = len diff
         direction = diff ./. distance
         ray = Ray point direction epsilon distance
-{-
-spawnShadowRaysFromType (Softbox lightPos) point =
-    concat [spawnShadowRaysFromType (PointSource pos) point | pos <- positions]
-    where
-        positions = 
-        --| Softbox Pt3 Vec3 Vec3 Int -- ^ Softbox origin side1 side2 numRays
--}
+spawnShadowRaysFromType (Softbox origin dir1 dir2 n) point = do
+    rand1s <- getRandomRs n (0, 1)
+    rand2s <- getRandomRs n (0, 1)
+    let step1s = map (dir1 .*) rand1s
+    let step2s = map (dir2 .*) rand2s
+    let positions = map (origin .+.) $ zipWith (.+.) step1s step2s
+    concat <$> sequence [spawnShadowRaysFromType (PointSource pos) point | pos <- positions]
         
--- TODO: Softbox as concatmap over random pointsources.
-
 -- | Propagate the given ray from the given light through the scene. Return 
 -- the resulting incident light of the lightray, or Nothing if it is 
 -- blocked.
@@ -460,12 +470,16 @@ propagateShadowRay scene light ray =
         [] -> Just (normalize (rayDir ray), color)
         _  -> Nothing
     where
-        color = (lightColor light) .* (attenuation (lightType light) ray)
-
+        color = (scaledLightColor light) .* (attenuation (lightType light) ray)
+ 
 attenuation :: LightType -> Ray -> Flt
 attenuation (Directional _) _ = 1
-attenuation _             ray = 1 -- / (rayFar ray)^2 -- 1/(((rayFar ray) * (rayFar ray)) faster?
+attenuation _             ray = 1 / (rayFar ray)^2 -- 1/(((rayFar ray) * (rayFar ray)) faster?
 
+-- scale to account for multiple lightrays -- TODO: make this nicer
+scaledLightColor :: Light -> Color
+scaledLightColor (Light (Softbox _ _ _ n) col) = col .* (1 / fromIntegral n)
+scaledLightColor (Light _ col) = col
 
 rayTrace :: Pixel -> RayTracer Color
 rayTrace pixel = do

@@ -2,7 +2,7 @@
 --
 -- Inspired by bling-raytracer
 
-module ObjParser where
+module ObjParser (parseObjFile) where
 
 import Types
 import Math
@@ -31,12 +31,6 @@ parseObjFile :: FilePath -> IO TriangleMesh
 --parseObjFile = do return $ TriangleMesh []
 parseObjFile filepath = do
     input <- BS.readFile filepath
-
-    {-
-    let result = runST $ do
-        state <- initialState
-        runPT objFileParser state filepath input
-        -}
 
     let result = runST $ do
             state <- initialState

@@ -15,40 +15,34 @@ main = do
 
 testScene anyGeom = scene
     where
-        mc1 = MaterialComponent (0.1, PureMaterial Diffuse white)
-        mc2 =  MaterialComponent (1, PureMaterial (Phong 50) white)
-        mc3 =  MaterialComponent (0.1, PureMaterial Reflecting white)
-        mat = [mc1, mc2, mc3]
-        {-
-        objs = Fork
-                [Node (Scale 1 2 1.5) ( 
-                    Node (Translation (F3   0    0 8))
-                        (Leaf (Object (MkAnyGeom Sphere) mat))
-                    )
-                ,Node (Translation (F3 (-1.1) 0 12)) (Leaf (Object anyGeom mat))
-                --,Node (Translation (F3 (-1.1) 0 12)) (Leaf (Object (MkAnyGeom Sphere) mat))
-                ,Node (Translation (F3 ( 1.1) 0 12)) (Leaf (Object (MkAnyGeom Sphere) mat))]
-                -}
+        pmDiff  = PureMaterial Diffuse white
+        pmPhong = PureMaterial (Phong 50) white
+        pmRefl  =  PureMaterial Reflecting white
+        mat = [MaterialComponent (  1, pmDiff),
+               MaterialComponent (  1, pmPhong)]
+               --MaterialComponent (0.1, pmRefl)]
 
-        triangle = Triangle 
-                        (Vertex (F3 (-1) (-1) 0) ((1)*.f3e3))
-                        (Vertex (F3   2  (-1) 0) ((1)*.f3e3))
-                        (Vertex (F3   0    2  0) ((1)*.f3e3))
-        --objs = Node Identity (Leaf (Object (MkAnyGeom triangle) mat))
-        --objs = Node (Translation (F3 3 2 0)) (Leaf (Object (MkAnyGeom Sphere) mat))
-        objs = Node (Translation (F3 0 (-1.5) 0)) (Leaf (Object anyGeom mat))
+        planeGeom = MkAnyGeom $ mkPlane (F3 (-10) 0 (-10)) (F3 20 0 0) (F3 0 0 20)
+        planeMat =  [MaterialComponent (0.8, pmDiff)
+                    ,MaterialComponent (0.1, pmPhong)
+                    ]
+                    --MaterialComponent (0.5, pmRefl)]
+        plane = Object planeGeom planeMat
+
+        objs = Fork [Node Identity (Leaf (Object anyGeom mat))
+                    ,Node Identity (Leaf plane)]
 
 
-        lights = [Light (PointSource (F3   10  10 10)) (white)
-                 ,Light (PointSource (F3 (-10) 10 10)) (0.5 *. white)]
+        n = 30
+        lights = [Light (Softbox (F3 12 6 5) (F3 (-4) 0 (4)) (F3 0 2 0) n) (15.5 *. white)
+                 ,Light (Softbox (F3 (-10) 0 (-5)) (F3 (2) 4 (-2)) (F3 5 0 2) n) (100.0 *. white)
+                 ,Light (Softbox (F3 (4) 10 (-5)) (F3 (1) 0 (1)) (F3 (-0.5) 1 0.5) n) (10.3 *. white)]
         scene = Scene lights objs
 
 testConf = RayTraceConfig 5 0 res cam (0.1*.white)
     where
-        res = Resolution (200, 200)
-        cam = camLookingAt (F3 0 0 (10)) (F3 0 0 0) f3e2 40
-        --cam = Camera (F3 0 0 (10)) ((1)*.f3e1, (1)*.f3e2, (1)*.f3e3) 40
-
+        res = Resolution (400, 400)
+        cam = camLookingAt (F3 0 2.2 (15)) (F3 0 1 0) f3e2 30
 
 
 -- vim: expandtab smarttab sw=4 ts=4

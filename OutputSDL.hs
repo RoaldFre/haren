@@ -27,6 +27,7 @@ renderSDL renderMode scene conf = do
     screen <- setVideoMode nx ny 32 [SWSurface]
     setCaption "haren" []
     sequence $ run scene conf (renderSDLactions renderMode screen)
+    putStrLn "All done!"
     quitHandler
 
 renderSDLactions :: (Renderer c m) => RenderMode -> Surface -> m [IO ()]
