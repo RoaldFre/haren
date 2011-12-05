@@ -36,9 +36,11 @@ forceprof:
 	ghc ${OPTS} --make -fforce-recomp -prof -auto-all -caf-all Main
 prof:
 	ghc ${OPTS} --make -prof -auto-all -caf-all Main
-	./Main +RTS -p -sstderr 2> Main.stderr
+	./Main +RTS -p -hc -sstderr 2> Main.stderr
 	less Main.stderr
 	less Main.prof
+	hp2ps -e8in -c Main.hp
+	evince Main.ps
 
 test:
 	ghc ${OPTS_QUICK} --make MathTest.hs
