@@ -1,9 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances, RankNTypes, FlexibleInstances #-}
---{-# LANGUAGE UndecidableInstances #-}
--- UndecidableInstances is really nasty, and I need to find a proper way to get a 
--- functional dependency "t -> x" into:
--- instance forall t x. (NumTuple t x) => Show t where
--- (or an alternative way altogether to do the above)
+
 
 module Math where
 
@@ -170,10 +166,39 @@ mirror v n = 2*(v .*. n) .*. n  .-.  v
 reflect :: Vec3 -> UVec3 -> Vec3
 reflect v n = v  .-.  2*(v .*. n) .*. n
 
+-- | Numerical tuple with 2 components
+data F2 = F2 {f2x :: !Flt
+             ,f2y :: !Flt}
+
+instance (NumTuple Flt) F2 where
+    tupleToList (F2 x y) = [x, y]
+    tupleFromList [x, y] = F2 x y
+instance Show F2 where
+    show = showTuple -- TODO: specify this somehow at the level of NumTuple
+instance Eq F2 where
+    (==) = equalsWith equalsEpsilon
+
+f2zero = F2 0 0
+f2e1   = F2 1 0
+f2e2   = F2 0 1
+
+type Pt2 = F2
+type Vec2 = F2
+type UVec2 = F2 -- ^ Unit Vector
+
+from3Dto2D :: F3 -> F2
+from3Dto2D (F3 x y _) = F2 x y
+
+
 
 
 -- | Type class representing matrices composed of numerical tuples.
 -- Minimum definition: matrToList and matrFromList
+--
+-- WARNING: Compile with optimizations and increase the default 
+-- unfolding-use-threshold or this will be *unusably slow*!
+-- Also, increase the max-worker-args to something like at least 32, so 
+-- that two 4x4 matrices can be unfolded in the arguments.
 --
 -- TODO: this can be generalised to arbitrary rank tensors, which will 
 -- unify this and the tuple code above into one tidy package :P
@@ -397,6 +422,23 @@ scalexyzM4 x y z = M4 (x .*. f4e1) (y .*. f4e2) (z .*. f4e3) f4e4
 -- | Scaling matrices (M, M^-1) for the given x, y, z factors.
 scalexyzM4s :: Flt -> Flt -> Flt -> (M4, M4)
 scalexyzM4s x y z = (scalexyzM4 x y z, scalexyzM4 (1/x) (1/y) (1/z))
+
+-- | The determinant of the given 3x3 matrix.
+det3 :: M3 -> Flt
+det3 (M3 r1 r2 r3) = r1 .*. (r2 .^. r3)
+
+-- | Solve a 3x3 system using Cramer's rule. (solve3x3 M v) returns x where 
+-- M*x = v.
+--solve3x3 :: M3 -> Vec3 -> Vec3
+solve3x3 :: M3 -> F3 -> F3
+solve3x3 m@(M3 a b c) v = F3 x y z
+    where
+        x = (det3 (M3 v b c)) / detm
+        y = (det3 (M3 a v c)) / detm
+        z = (det3 (M3 a b v)) / detm
+        detm = det3 m
+
+test = rotM4 f3e1 90
 
 -- vim: expandtab smarttab sw=4 ts=4
 
