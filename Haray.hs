@@ -14,6 +14,7 @@ import System.Random
 
 import Control.Monad.State
 import Control.Applicative
+import GHC.Exts
 
 import Prelude hiding (concatMap)
 import Data.Foldable hiding (minimum, maximum, concat, concatMap, foldl')
@@ -229,42 +230,55 @@ optimizeTriangleMesh n (TriangleMesh triangles) =
 -- box), then that list will be put in a leaf in its entirety.
 buildBVH :: (Boxable a) => Int -> [Boxed a] -> BVH a
 --buildBVH _ [] = error "Can't make a BVH from nothing!"
-buildBVH n xs
-   | length xs <= n = BVHleaf xs
-   | otherwise = case bestPartition $ partitionBoxeds xs of
+buildBVH n xs = buildBVH' $ WL (length xs) xs
+    --where 
+buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
+buildBVH' withLength@(WL l xs)
+   | l <= 111111    = BVHleaf xs
+   | otherwise = case bestPartition $ partitionBoxeds withLength of
         Nothing       -> BVHleaf xs
-        Just (p1, p2) -> BVHnode (buildBVH n <$> p1) (buildBVH n <$> p2)
+        Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
+                                 (buildBVH' <$> swapBoxedAndWithLength p2)
+    where
+        swapBoxedAndWithLength (WL n b) = Boxed (thebox b) (WL n (unbox b))
 
--- | A partition of a bunch of boxeds, each part wrapped in a boxed itself
-type BoxedPartition a = (Boxed [Boxed a], Boxed [Boxed a])
+
+-- | A thingamajing with an associated length of said thingamajing stored 
+-- for fast access.
+data WithLength a = WL Int a deriving Functor
+
+-- | A partition of a bunch of boxeds, each part wrapped in a boxed itself. 
+-- For each 'bunch of boxeds', the number of elements inside is stored as 
+-- well.
+type BoxedPartition a = (WithLength (Boxed [Boxed a]), WithLength (Boxed [Boxed a]))
 
 -- | Generate a list of possible Partitions from a list of boxeds. 
--- Currently, only partitions dividing the three axes in the center are 
--- generated (so this will run in O(n) instead of O(n log n) when sorting). 
--- Partitions where one of the parts is empty are suppressed.
-partitionBoxeds :: (Boxable a) => [Boxed a] -> [BoxedPartition a]
-partitionBoxeds []  = []
-partitionBoxeds [_] = []
-partitionBoxeds xs  = map (\(a, b) -> (mkBoxed a, mkBoxed b)) $
-                     filter (\(a, b) -> not (null a)  &&  not (null b))
-                        [partition (\b -> f3x (min b) < thresholdx) xs
-                        ,partition (\b -> f3y (min b) < thresholdy) xs
-                        ,partition (\b -> f3z (min b) < thresholdz) xs]
+partitionBoxeds :: (Boxable a) => WithLength [Boxed a] -> [BoxedPartition a]
+partitionBoxeds boxedsWL = map (mapPair (fmap mkBoxed)) $
+    partitionList sortedx ++ partitionList sortedy ++ partitionList sortedz
     where
+        sortedx = fmap (sortWith (\b -> f3x (min b))) boxedsWL
+        sortedy = fmap (sortWith (\b -> f3y (min b))) boxedsWL
+        sortedz = fmap (sortWith (\b -> f3z (min b))) boxedsWL
         min boxed = boxmin where (Box boxmin boxmax) = box boxed
-        (Box totalmin totalmax) = box xs
-        (F3 thresholdx thresholdy thresholdz) = totalmin .+. (totalmax .* 0.5)
+
+mapPair :: (a -> b) -> (a, a) -> (b, b)
+mapPair f (x, y) = (f x, f y)
+
+-- | No trivial partitions "((0,[]), (n,xs))" are created.
+partitionList :: WithLength [a] -> [(WithLength [a], WithLength [a])]
+partitionList (WL 0 []) = []
+partitionList (WL n (x:xs)) = partitionList' (WL 1 [x]) (WL (n - 1) xs)
+    where
+        partitionList' (WL n1 xs) (WL 0  [])   = []
+        partitionList' (WL n1 xs) (WL n2 (y:ys)) = (WL n1 xs, WL n2 (y:ys)) :
+                            partitionList' (WL (n1 + 1) (y:xs)) (WL (n2 - 1) ys)
+
 
 costOfPartition :: BoxedPartition a -> Flt
-costOfPartition (a, b) = 
-    (halfSurfaceArea $ box a) * fromIntegral (length $ unbox a)
-    + (halfSurfaceArea $ box b) * fromIntegral (length $ unbox b)
-    -- Let's *hope* GHC will get that length inlined with some useful work 
-    -- (eg partitioning) so we don't have to do this in O(n)
-    -- TODO: or make *all* partitions, traversing objectlist to 
-    -- make possible subpartitions is O(n) as well and we get the number of 
-    -- elements 'to the left' immediately (and one extra O(n) call for 
-    -- length -> #right)
+costOfPartition ((WL n1 b1), (WL n2 b2)) = 
+    (halfSurfaceArea $ box b1) * (fromIntegral n1)
+    + (halfSurfaceArea $ box b2) * (fromIntegral n2)
     where 
         halfSurfaceArea (Box p1 p2) = x*y + y*z + z*x
             where (F3 x y z) = p2 .-. p1
