@@ -5,6 +5,8 @@ module Types where
 import Math
 import Data.List hiding (intersect)
 import Data.Ix
+import qualified Data.Foldable as F
+import qualified Data.Sequence as S
 
 
 data MaterialType = Diffuse
@@ -199,6 +201,11 @@ instance (Boxable a) => Boxable [a] where
     box [] = error "Can't box an empty list of boxables!"
     box boxables = foldl1' (\b1 b2 -> box (b1, b2)) (map box boxables)
 
+instance (Boxable a) => Boxable (S.Seq a) where
+    box xs
+        | S.length xs <= 0 = error "Can't box an empty sequence of boxables!"
+        | otherwise        = F.foldl1 (\b1 b2 -> box (b1, b2)) (fmap box xs)
+
 instance Boxable AnyGeom where
     box (MkAnyGeom geom) = boundingBox geom
 
@@ -299,6 +306,8 @@ pixToPt :: Pixel -> Pt2
 pixToPt (Pixel (x, y)) = F2 (fromIntegral x) (fromIntegral y)
 
 newtype Resolution = Resolution (Int, Int) deriving Show
+resToPix :: Resolution -> Pixel
+resToPix (Resolution pair) = Pixel pair
 
 -- | Lazy RGB triplet, components in the range [0..1].
 -- TODO make strict anyway?
