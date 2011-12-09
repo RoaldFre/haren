@@ -229,17 +229,15 @@ optimizeTriangleMesh n (TriangleMesh triangles) =
 -- list further (eg when it holds more than 'n' items with the exact same 
 -- box), then that list will be put in a leaf in its entirety.
 buildBVH :: (Boxable a) => Int -> [Boxed a] -> BVH a
---buildBVH _ [] = error "Can't make a BVH from nothing!"
 buildBVH n xs = buildBVH' $ WL (length xs) xs
-    --where 
-buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
-buildBVH' withLength@(WL l xs)
-   | l <= 111111    = BVHleaf xs
-   | otherwise = case bestPartition $ partitionBoxeds withLength of
-        Nothing       -> BVHleaf xs
-        Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
-                                 (buildBVH' <$> swapBoxedAndWithLength p2)
     where
+        buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
+        buildBVH' withLength@(WL l xs)
+           | l <= n    = BVHleaf xs
+           | otherwise = case bestPartition $ partitionBoxeds withLength of
+                Nothing       -> BVHleaf xs
+                Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
+                                         (buildBVH' <$> swapBoxedAndWithLength p2)
         swapBoxedAndWithLength (WL n b) = Boxed (thebox b) (WL n (unbox b))
 
 
@@ -304,7 +302,7 @@ resetDepth = RT $ gets stateMaxDepth >>= \d -> modify (\s -> s {stateDepth = d})
 getRndGen  = RT $ gets stateRndGen
 setRndGen new = RT $ modify (\s -> s {stateRndGen = new})
 
-instance (Renderer RayTraceConfig) RayTracer where
+instance Renderer RayTraceConfig RayTracer where
     colorPixel = rayTrace
     getResolution = getRes
     run scene conf (RT s) = evalState s (mkInitialState scene conf)
