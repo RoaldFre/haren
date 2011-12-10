@@ -284,6 +284,10 @@ class Mult a b c | a b -> c where
     infixl 7 .*.
     (.*.) :: a -> b -> c
 
+instance Mult F2 F2 Flt where (.*.) = dot
+instance Mult F2 Flt F2 where (.*.) = (.*) -- note : .* and *. are often more 
+instance Mult Flt F2 F2 where (.*.) = (*.) -- usefull (verbose) than .*.
+
 instance Mult F3 F3 Flt where (.*.) = dot
 instance Mult F3 Flt F3 where (.*.) = (.*) -- note : .* and *. are often more 
 instance Mult Flt F3 F3 where (.*.) = (*.) -- usefull (verbose) than .*.
@@ -311,6 +315,7 @@ class (Num l, Fractional l, Mult x l x) => Div x l where
     infixl 7 ./.
     (./.) :: x -> l -> x
     x ./. l = x .*. (1/l)
+instance Div F2 Flt
 instance Div F3 Flt
 instance Div F4 Flt
 instance Div M3 Flt
@@ -322,6 +327,7 @@ class Add a where
     infixl 6 .+.
     (.+.) :: a -> a -> a
 
+instance Add F2 where (.+.) = addt
 instance Add F3 where (.+.) = addt
 instance Add F4 where (.+.) = addt
 instance Add M4 where (.+.) = addm
@@ -333,6 +339,7 @@ class Sub a where
     infixl 6 .-.
     (.-.) :: a -> a -> a
 
+instance Sub F2 where (.-.) = subt
 instance Sub F3 where (.-.) = subt
 instance Sub F4 where (.-.) = subt
 instance Sub M4 where (.-.) = subm

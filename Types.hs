@@ -12,6 +12,7 @@ import qualified Data.Sequence as S
 data MaterialType = Diffuse
         | Phong Flt      -- ^ Phong exponent
         | Reflecting
+        | Glossy Flt Int -- ^ Glossiness and number of samples
         | Refracting Flt -- ^ index of refraction
         deriving Show
 data PureMaterial = PureMaterial MaterialType Color deriving Show

@@ -26,21 +26,24 @@ main = do
     mesh <- parseObjFile "teapot.obj"
     --let optimMesh = optimizeTriangleMesh 10 mesh
     let optimMesh = optimizeTriangleMesh 10 mesh
-    --renderPPM "./out.ppm" (testScene optimMesh) testConf
-    renderSDL PerLine (testScene optimMesh) testConf
+    renderPPM "./glossyTeapot.ppm" (testScene optimMesh) testConf
+    --renderSDL PerLine (testScene optimMesh) testConf
 
 testScene anyGeom = scene
     where
-        pmDiff  = PureMaterial Diffuse white
-        pmPhong = PureMaterial (Phong 25) white
-        pmRefl  =  PureMaterial Reflecting white
+        pmDiff   = PureMaterial Diffuse white
+        pmPhong  = PureMaterial (Phong 25) white
+        pmRefl   = PureMaterial Reflecting white
+        pmGlossyTp = PureMaterial (Glossy 0.08 5) white
+        pmGlossyPlane = PureMaterial (Glossy 0.05 5) white
         mat = [MaterialComponent (0.5, pmDiff),
                MaterialComponent (  2, pmPhong),
-               MaterialComponent (0.4, pmRefl)]
+               MaterialComponent (30, pmGlossyTp)]
 
         planeGeom = MkAnyGeom $ mkPlane (F3 (-100) 0 (100)) (F3 200 0 0) (F3 0 0 (-1000))
-        planeMat =  [MaterialComponent (0.8, pmDiff)
-                    ,MaterialComponent (0.1, pmPhong)
+        planeMat =  [MaterialComponent (0.7, pmDiff)
+                    --,MaterialComponent (0.1, pmPhong)
+                    ,MaterialComponent (20, pmGlossyPlane)
                     ]
                     --MaterialComponent (0.5, pmRefl)]
         plane = Object planeGeom planeMat
@@ -49,7 +52,7 @@ testScene anyGeom = scene
                     ,Node Identity (Leaf plane)]
 
 
-        n = 50
+        n = 20
         key   = Light (Softbox (F3 5 0 3) (F3 (1) 0 (0)) (F3 0 6 0) n) (40 *. white)
         strip = Light (Softbox (F3 (-1.8) 0 3) (F3 (0.1) 0 (0)) (F3 0 6 0) n) (8 *. white)
         rim   = Light (Softbox (F3 (-11) 0 (-5)) (F3 0 4 0) (F3 3 0 (-8)) n) (100 *. white)
@@ -59,10 +62,14 @@ testScene anyGeom = scene
         lights = [key, strip, rim, top, top2]
         scene = Scene lights objs
 
-testConf = RayTraceConfig 5 0 res cam (0.02*.white)
+recursionDepth = 2
+aaSamples      = 4
+seed           = 0
+
+testConf = RayTraceConfig recursionDepth aaSamples seed res cam (0.02*.white)
     where
-        res = Resolution (900, 600)
-        cam = camLookingAt (F3 0 2.7 (10)) (F3 0 1.2 0) f3e2 31
+        res = Resolution (600, 400)
+        cam = camLookingAt (F3 0 3.7 (10)) (F3 0 1.10 0) f3e2 31
 
 ---}
 

@@ -20,23 +20,25 @@ import Prelude hiding (concatMap)
 import Data.Foldable hiding (minimum, maximum, concat, concatMap, foldl')
 
 data RayTraceConfig = RayTraceConfig {
-        confDepth   :: Int,
-        confSeed    :: Int,
-        confRes     :: Resolution, -- TODO, this and cam are shared with rasterizer, not part of raytracer per se
-        confCam     :: Camera,
-        confAmbient :: Color
+        confDepth     :: Int,
+        confAAsamples :: Int,
+        confSeed      :: Int,
+        confRes       :: Resolution, -- TODO, this and cam are shared with rasterizer, not part of raytracer per se
+        confCam       :: Camera,
+        confAmbient   :: Color
     } deriving Show
 
 -- TODO: make (some of) these strict?
 data RayTraceState = RayTraceState {
-        stateScene    :: AnyIntersectable,
-        stateLights   :: [Light],
-        stateAmbient  :: Color,
-        stateDepth    :: Int,
-        stateRndGen   :: StdGen, -- ^ Random number generator
-        stateRes      :: Resolution,
-        stateCam      :: Camera,
-        stateMaxDepth :: Int
+        stateScene     :: AnyIntersectable,
+        stateLights    :: [Light],
+        stateAmbient   :: Color,
+        stateDepth     :: Int,
+        stateAAsamples :: Int,
+        stateRndGen    :: StdGen, -- ^ Random number generator
+        stateRes       :: Resolution,
+        stateCam       :: Camera,
+        stateMaxDepth  :: Int
     } deriving Show
 
 
@@ -234,8 +236,8 @@ buildBVH n xs = buildBVH' $ WL (length xs) xs
         buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
         buildBVH' withLength@(WL l xs)
            | l <= n    = BVHleaf xs
-           -- | otherwise = case bestPartition $ partitionBoxeds withLength of
-           | otherwise = case bestPartition $ partitionBoxedsFast withLength of
+           | otherwise = case bestPartition $ partitionBoxeds withLength of
+           -- | otherwise = case bestPartition $ partitionBoxedsFast withLength of
                 Nothing       -> BVHleaf xs
                 Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
                                          (buildBVH' <$> swapBoxedAndWithLength p2)
@@ -316,15 +318,16 @@ bestPartition (p1:p2:ps) = if costOfPartition p1 < costOfPartition p2
 
 newtype RayTracer a = RT (State RayTraceState a)
     deriving (Monad, Functor)
-getRes     = RT $ gets stateRes
-getLights  = RT $ gets stateLights
-getAmbient = RT $ gets stateAmbient
-getDepth   = RT $ gets stateDepth
-decDepth   = getDepth >>= (\d -> RT $ modify (\s -> s {stateDepth = d - 1}))
-getScene   = RT $ gets stateScene
-getCam     = RT $ gets stateCam
-resetDepth = RT $ gets stateMaxDepth >>= \d -> modify (\s -> s {stateDepth = d})
-getRndGen  = RT $ gets stateRndGen
+getRes       = RT $ gets stateRes
+getLights    = RT $ gets stateLights
+getAmbient   = RT $ gets stateAmbient
+getDepth     = RT $ gets stateDepth
+decDepth     = getDepth >>= (\d -> RT $ modify (\s -> s {stateDepth = d - 1}))
+getAAsamples = RT $ gets stateAAsamples
+getScene     = RT $ gets stateScene
+getCam       = RT $ gets stateCam
+resetDepth   = RT $ gets stateMaxDepth >>= \d -> modify (\s -> s {stateDepth = d})
+getRndGen    = RT $ gets stateRndGen
 setRndGen new = RT $ modify (\s -> s {stateRndGen = new})
 
 instance Renderer RayTraceConfig RayTracer where
@@ -334,9 +337,10 @@ instance Renderer RayTraceConfig RayTracer where
 
 mkInitialState :: Scene -> RayTraceConfig -> RayTraceState
 mkInitialState scene conf =
-    RayTraceState internalScene lights ambient depth rndGen res cam depth
+    RayTraceState internalScene lights ambient depth aa rndGen res cam depth
     where
         depth = confDepth conf
+        aa = confAAsamples conf
         rndGen = mkStdGen $ confSeed conf
         res = confRes conf
         cam = confCam conf
@@ -374,7 +378,17 @@ getRandomRs n range = do
     let (newGen, gen') = split gen
     setRndGen newGen
     return $ take n $ randomRs range gen'
-    
+
+-- Normal distributed variable with given standard deviation and zero mean. 
+-- Via Box-Muller transform.
+getStdNorm :: Flt -> RayTracer Flt
+getStdNorm stdev = do
+    [u1, u2] <- getRandomRs 2 (0, 1)
+    return $ stdev * (sqrt (-2 * (log u1)) * (cos (2*pi*u2)))
+
+getStdNorms :: Int -> Flt -> RayTracer [Flt]
+getStdNorms num stdev = replicateM num $ getStdNorm stdev
+
 
 -- | Find the closest intersection of the ray with an intersectable. Only 
 -- intersections where the ray enters the objects from the outside (as 
@@ -388,8 +402,22 @@ intersectFirst intersectable ray =
             correctSide int = (rayDir ray) .*. (intNorm int) < 0
             
 
-cameraRay :: Resolution -> Camera -> Pixel -> Ray
-cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
+cameraRays :: Pixel -> RayTracer [Ray]
+cameraRays pixel = do
+    res <- getRes -- TODO: getResolution from Renderer?
+    cam <- getCam
+    num <- getAAsamples
+    let pixPt = pixToPt pixel
+    if num <= 1
+        then return $ [cameraRay res cam pixPt]
+        else do
+            dis <- getRandomRs num (-0.5, 0.5)
+            djs <- getRandomRs num (-0.5, 0.5)
+            let pts = zipWith (\di dj -> pixPt .+. (F2 di dj)) dis djs
+            return $ map (cameraRay res cam) pts
+
+cameraRay :: Resolution -> Camera -> Pt2 -> Ray
+cameraRay (Resolution (nx, ny)) cam (F2 i j) =
     Ray (camPos cam) dir 0 infinity 0
     where
         -- See p164 and 203-204 of Fundamentals of Computer 
@@ -397,13 +425,11 @@ cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
         -- We choose n = 1.
         nxFlt = fromIntegral nx
         nyFlt = fromIntegral ny
-        iFlt = fromIntegral i
-        jFlt = fromIntegral j
         (u, v, w) = camUVW cam
         halfHeight = tan ((camFovy cam) * pi / 360) -- tan(theta/2)
         halfWidth  = halfHeight * nxFlt / nyFlt
-        us = halfWidth  * ((2*iFlt + 1)/nxFlt - 1) -- i == 0 => left
-        vs = halfHeight * (1 - (2*jFlt + 1)/nyFlt) -- j == 0 => top
+        us = halfWidth  * ((2*i + 1)/nxFlt - 1) -- i == 0 => left
+        vs = halfHeight * (1 - (2*j + 1)/nyFlt) -- j == 0 => top
         dir = normalize $ us*.u .+. vs*.v .-. w -- ws = -n = -1
 
 
@@ -436,12 +462,38 @@ colorMaterialType int (Phong p) (ilDir, ilCol) =
     where
         n = intNorm int
         h = normalize $ ilDir .-. (intDir int)
-colorMaterialType int Reflecting (ilDir, ilCol) =
+colorMaterialType int Reflecting (ilDir, _) =
     black `orRecurseOn` (colorRay ray)
     where
         ray = Ray (intPos int) reflectedDir epsilon infinity (intTotDist int)
         reflectedDir = reflect (intDir int) (intNorm int)
+colorMaterialType int (Glossy stdev n) (ilDir, _) =
+    black `orRecurseOn` do
+        dus <- getStdNorms n stdev
+        dvs <- getStdNorms n stdev
+        let perturbs = perturb (zip dus dvs) reflectedDir
+        let directions = filter (\d -> (intNorm int) .*. d > 0) perturbs -- Only reflect *away*!
+        let rays = map makeReflRay directions
+        colorRays n rays
+    where
+        makeReflRay dir = Ray (intPos int) dir epsilon infinity (intTotDist int)
+        reflectedDir = reflect (intDir int) (intNorm int)
 
+perturb :: [(Flt, Flt)] -> UVec3 -> [UVec3]
+perturb deltas vec = map perturb1 deltas
+    where
+        perturb1 (du, dv) = normalize $ vec .+. u.*du .+. v.*dv
+        u = if (vec .*. f3e1) < 0.8
+                then normalize $ vec .^. f3e1
+                else normalize $ vec .^. f3e2
+        v = vec .^. u
+
+-- | Return the combined color from the rays, divided by the given factor.
+-- Function is strict.
+colorRays :: Int -> [Ray] -> RayTracer Color
+colorRays n rays = do
+    combined <- foldl' (.+.) black `fmap` mapM colorRay rays
+    return $! combined ./. ((fromIntegral n)::Flt)
 
 colorRay :: Ray -> RayTracer Color
 colorRay ray = do
@@ -520,9 +572,8 @@ scaledLightColor (Light _ col) = col
 
 rayTrace :: Pixel -> RayTracer Color
 rayTrace pixel = do
-    res <- getRes -- TODO: getResolution from Renderer?
-    cam <- getCam
     resetDepth
-    (colorRay . (cameraRay res cam)) pixel
+    num <- getAAsamples
+    cameraRays pixel >>= colorRays num
 
 -- vim: expandtab smarttab sw=4 ts=4
