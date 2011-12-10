@@ -59,8 +59,8 @@ type TransformedObj = Transformed Object
 
 
 transformRay :: M4 -> Ray -> Ray
-transformRay trans (Ray origin direction near far) =
-    Ray (trans `multPt` origin) (trans `multVec` direction) near far
+transformRay trans (Ray origin direction near far dist) =
+    Ray (trans `multPt` origin) (trans `multVec` direction) near far dist
 
 transformInt :: Pt3 -> (M4, M4) -> Intersection -> Intersection
 transformInt originalOrigin (trans, invTrans) int =
@@ -234,6 +234,7 @@ buildBVH n xs = buildBVH' $ WL (length xs) xs
         buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
         buildBVH' withLength@(WL l xs)
            | l <= n    = BVHleaf xs
+           -- | otherwise = case bestPartition $ partitionBoxeds withLength of
            | otherwise = case bestPartition $ partitionBoxeds withLength of
                 Nothing       -> BVHleaf xs
                 Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
@@ -243,7 +244,12 @@ buildBVH n xs = buildBVH' $ WL (length xs) xs
 
 -- | A thingamajing with an associated length of said thingamajing stored 
 -- for fast access.
-data WithLength a = WL Int a deriving Functor
+data WithLength a = WL {
+    wlLength :: Int,
+    fromWL   :: a 
+} deriving Functor
+toWL :: [a] -> WithLength [a]
+toWL xs = WL (length xs) xs
 
 -- | A partition of a bunch of boxeds, each part wrapped in a boxed itself. 
 -- For each 'bunch of boxeds', the number of elements inside is stored as 
@@ -259,6 +265,25 @@ partitionBoxeds boxedsWL = map (mapPair (fmap mkBoxed)) $
         sortedy = fmap (sortWith (\b -> f3y (min b))) boxedsWL
         sortedz = fmap (sortWith (\b -> f3z (min b))) boxedsWL
         min boxed = boxmin where (Box boxmin boxmax) = box boxed
+
+
+-- Only partitions dividing the three axes in the center are generated (so 
+-- this will run in O(n) instead of O(n log n) when sorting).  Partitions 
+-- where one of the parts is empty are suppressed.
+partitionBoxedsFast :: (Boxable a) => WithLength [Boxed a] -> [BoxedPartition a]
+partitionBoxedsFast (WL 0 [])  = []
+partitionBoxedsFast (WL 1 [_]) = []
+partitionBoxedsFast (WL _ xs)  = map (mapPair (fmap mkBoxed . toWL)) $
+                     filter (\(a, b) -> not (null a)  &&  not (null b))
+                        [partition (\b -> f3x (min b) < thresholdx) xs
+                        ,partition (\b -> f3y (min b) < thresholdy) xs
+                        ,partition (\b -> f3z (min b) < thresholdz) xs]
+    where
+        min boxed = boxmin where (Box boxmin boxmax) = box boxed
+        (Box totalmin totalmax) = box xs
+        (F3 thresholdx thresholdy thresholdz) = totalmin .+. (totalmax .* 0.5)
+
+
 
 mapPair :: (a -> b) -> (a, a) -> (b, b)
 mapPair f (x, y) = (f x, f y)
@@ -365,13 +390,13 @@ intersectFirst intersectable ray =
 
 cameraRay :: Resolution -> Camera -> Pixel -> Ray
 cameraRay (Resolution (nx, ny)) cam (Pixel (i, j)) =
-    Ray (camPos cam) dir 0 infinity
+    Ray (camPos cam) dir 0 infinity 0
     where
         -- See p164 and 203-204 of Fundamentals of Computer 
         -- Graphics (Peter Shirley, 2nd ed) for drawing and info.
         -- We choose n = 1.
-        nxFlt = fromIntegral ny
-        nyFlt = fromIntegral nx
+        nxFlt = fromIntegral nx
+        nyFlt = fromIntegral ny
         iFlt = fromIntegral i
         jFlt = fromIntegral j
         (u, v, w) = camUVW cam
@@ -414,9 +439,8 @@ colorMaterialType int (Phong p) (ilDir, ilCol) =
 colorMaterialType int Reflecting (ilDir, ilCol) =
     black `orRecurseOn` ((ilCol .***.) <$> (colorRay ray))
     where
-        ray = Ray (intPos int) reflectedDir epsilon infinity
+        ray = Ray (intPos int) reflectedDir epsilon infinity (intTotDist int)
         reflectedDir = reflect (intDir int) (intNorm int)
-    --TODO attenuation?
 
 
 colorRay :: Ray -> RayTracer Color
@@ -424,10 +448,15 @@ colorRay ray = do
     scene <- getScene
     ambient <- getAmbient
     case (intersectFirst scene ray) of
-        Nothing -> return black
-        Just intersection -> fmap (ambient .+.) $ color intersection
+        Nothing  -> return black
+        Just int -> fmap (\c -> ambient .+. (attenuate (intTotDist int) c)) $ color int
         --Nothing -> return red
         --Just int -> return white
+
+--TODO clean this up, check if correct here, merge with the attenuation for 
+--propogating shadow rays -- lose the hack rescale factor
+attenuate :: Flt -> Color -> Color
+attenuate dist col = col ./. dist^2
 
 
 -- | (direction pointing *to* the lightsource, color of incident light)
@@ -464,7 +493,7 @@ spawnShadowRaysFromType (PointSource lightPos) point = return [ray]
         diff = lightPos .-. point
         distance = len diff
         direction = diff ./. distance
-        ray = Ray point direction epsilon distance
+        ray = Ray point direction epsilon distance 0
 spawnShadowRaysFromType (Softbox origin dir1 dir2 n) point = do
     rand1s <- getRandomRs n (0, 1)
     rand2s <- getRandomRs n (0, 1)
@@ -482,11 +511,7 @@ propagateShadowRay scene light ray =
         [] -> Just (normalize (rayDir ray), color)
         _  -> Nothing
     where
-        color = (scaledLightColor light) .* (attenuation (lightType light) ray)
- 
-attenuation :: LightType -> Ray -> Flt
-attenuation (Directional _) _ = 1
-attenuation _             ray = 1 / (rayFar ray)^2 -- 1/(((rayFar ray) * (rayFar ray)) faster?
+        color = scaledLightColor light
 
 -- scale to account for multiple lightrays -- TODO: make this nicer
 scaledLightColor :: Light -> Color

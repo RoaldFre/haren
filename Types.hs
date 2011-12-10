@@ -25,14 +25,21 @@ data Ray = Ray {
         rayOrigin :: !Pt3,
         rayDir    :: !Vec3, -- ^ *NOT* neccesarily normalised (eg for transformed rays)
         rayNear   :: !Flt,  -- ^ near clipping distance
-        rayFar    :: !Flt   -- ^ far clipping distance
+        rayFar    :: !Flt,  -- ^ far clipping distance
+        rayDist   :: !Flt   -- ^ Total distance traversed by the light before it became 
+                            --   this ray. Eg if this ray is a reflected 
+                            --   ray, the distance here is the distance of 
+                            --   the original ray before it reflected and 
+                            --   became this ray.
     } deriving Show
 
+-- TODO strict?
 data Intersection = Intersection {
-        intPos  :: Pt3,     -- ^ Position of the intersection
-        intDist :: Flt,     -- ^ Distance of intersecting ray
-        intDir  :: Vec3,    -- ^ Direction of intersecting ray, *NOT* normalised
-        intNorm :: UVec3,   -- ^ Normal vector of intersection surface, normalised
+        intPos     :: Pt3,     -- ^ Position of the intersection
+        intDist    :: Flt,     -- ^ Distance of the (last) intersecting ray
+        intTotDist :: Flt,     -- ^ Total accumulated distance traveled by rays till we got here
+        intDir     :: Vec3,    -- ^ Direction of intersecting ray, *NOT* normalised
+        intNorm    :: UVec3,   -- ^ Normal vector of intersection surface, normalised
         -- intLocalPos :: Maybe Pt3 -- ^ Needed for texture mapping
     -- Note to self: Keep intMat this as the last element to use some curry 
     -- tricks. TODO nicer alternative?
@@ -48,7 +55,7 @@ instance Eq Intersection where
 
 makeIntersection :: Ray -> Flt -> UVec3 -> Material -> Intersection
 makeIntersection ray dist normal mat = 
-    Intersection (walk ray dist) dist (rayDir ray) normal mat
+    Intersection (walk ray dist) dist (dist + (rayDist ray)) (rayDir ray) normal mat
 
 
 
@@ -70,7 +77,7 @@ data Sphere = Sphere deriving Show
 
 instance Geometry Sphere where
     boundingBox Sphere = Box (F3 (-1) (-1) (-1)) (F3 1 1 1)
-    intersectGeom Sphere ray@(Ray e d min max) =
+    intersectGeom Sphere ray@(Ray e d min max _) =
         [makeIntersection ray t (sphereNormal t) | t <- ts, min < t, t < max]
         where
             ts = solveQuadEq
@@ -124,7 +131,7 @@ instance Geometry Triangle where
 -}
 --TODO: this code is too slow: :-(
 --{-
-    intersectGeom (Triangle v1 v2 v3) ray@(Ray e d min max)
+    intersectGeom (Triangle v1 v2 v3) ray@(Ray e d min max _)
         -- | See pp206-208 of Fundamentals of Computer Graphics (Peter 
         -- Shirley, 2nd edition) for algorithm.
 --        | abs m < smallest              = [] -- TODO: use epsilon to do relative compare?
@@ -157,7 +164,7 @@ mkPlane origin dir1 dir2 = Plane origin dir1 dir2 $ normalize $ dir1 .^. dir2
        
 instance Geometry Plane where
     boundingBox (Plane o d1 d2 _) = box [o, o.+.d1, o.+.d2, o.+.d1.+.d2]
-    intersectGeom (Plane o d1 d2 normal) ray@(Ray e d min max)
+    intersectGeom (Plane o d1 d2 normal) ray@(Ray e d min max _)
         | t < min   || t > max   = []
         | gamma < 0 || gamma > 1 = []
         | beta < 0  || beta > 1  = []
@@ -240,8 +247,7 @@ camLookingAt pos lookAt up fovy =
 
 type CoordSyst = (UVec3, UVec3, UVec3)
 
-data LightType = Directional Vec3   -- ^ directional light, no attenuation
-        | PointSource Pt3           -- ^ Pointsource position
+data LightType = PointSource Pt3    -- ^ Pointsource position
         | Softbox Pt3 Vec3 Vec3 Int -- ^ Softbox origin side1 side2 numRays
         deriving Show
 
