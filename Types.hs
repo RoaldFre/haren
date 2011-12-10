@@ -316,7 +316,6 @@ resToPix :: Resolution -> Pixel
 resToPix (Resolution pair) = Pixel pair
 
 -- | Lazy RGB triplet, components in the range [0..1].
--- TODO make strict anyway?
 data Color = Color {
         cRed   :: Flt,
         cGreen :: Flt,

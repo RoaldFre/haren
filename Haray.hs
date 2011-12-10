@@ -235,7 +235,7 @@ buildBVH n xs = buildBVH' $ WL (length xs) xs
         buildBVH' withLength@(WL l xs)
            | l <= n    = BVHleaf xs
            -- | otherwise = case bestPartition $ partitionBoxeds withLength of
-           | otherwise = case bestPartition $ partitionBoxeds withLength of
+           | otherwise = case bestPartition $ partitionBoxedsFast withLength of
                 Nothing       -> BVHleaf xs
                 Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
                                          (buildBVH' <$> swapBoxedAndWithLength p2)
@@ -437,7 +437,7 @@ colorMaterialType int (Phong p) (ilDir, ilCol) =
         n = intNorm int
         h = normalize $ ilDir .-. (intDir int)
 colorMaterialType int Reflecting (ilDir, ilCol) =
-    black `orRecurseOn` ((ilCol .***.) <$> (colorRay ray))
+    black `orRecurseOn` (colorRay ray)
     where
         ray = Ray (intPos int) reflectedDir epsilon infinity (intTotDist int)
         reflectedDir = reflect (intDir int) (intNorm int)
