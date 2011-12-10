@@ -19,8 +19,6 @@ import GHC.Exts
 import Prelude hiding (concatMap)
 import Data.Foldable hiding (minimum, maximum, concat, concatMap, foldl')
 
-import qualified Data.Sequence as S
-
 data RayTraceConfig = RayTraceConfig {
         confDepth   :: Int,
         confSeed    :: Int,
@@ -231,65 +229,54 @@ optimizeTriangleMesh n (TriangleMesh triangles) =
 -- list further (eg when it holds more than 'n' items with the exact same 
 -- box), then that list will be put in a leaf in its entirety.
 buildBVH :: (Boxable a) => Int -> [Boxed a] -> BVH a
-buildBVH n bs = buildBVH' $ S.fromList bs
+buildBVH n xs = buildBVH' $ WL (length xs) xs
     where
-        buildBVH' :: (Boxable a) => S.Seq (Boxed a) -> BVH a
-        buildBVH' bs
-           | S.length bs <= n = BVHleaf $ toList bs
-           | otherwise        = case bestPartition $ partitionBoxeds bs of
-                Nothing         -> BVHleaf $ toList bs
-                Just (p1, p2) -> BVHnode (buildBVH' <$> p1) (buildBVH' <$> p2)
+        buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
+        buildBVH' withLength@(WL l xs)
+           | l <= n    = BVHleaf xs
+           | otherwise = case bestPartition $ partitionBoxeds withLength of
+                Nothing       -> BVHleaf xs
+                Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
+                                         (buildBVH' <$> swapBoxedAndWithLength p2)
+        swapBoxedAndWithLength (WL n b) = Boxed (thebox b) (WL n (unbox b))
 
--- | A partition of a sequence of boxeds, each part wrapped in a boxed 
--- itself. 
-type BoxedPartition a = (Boxed (S.Seq (Boxed a)), Boxed (S.Seq (Boxed a)))
 
--- | Generate a list of possible Partitions from a sequence of boxeds. This 
--- runs in O(n log n) time with n the number of Boxeds.
-partitionBoxeds :: (Boxable a) => S.Seq (Boxed a) -> [BoxedPartition a]
-partitionBoxeds boxeds = map (mapPair $ mkBoxed) $
-    partitionSeq sortedx ++ partitionSeq sortedy ++ partitionSeq sortedz
+-- | A thingamajing with an associated length of said thingamajing stored 
+-- for fast access.
+data WithLength a = WL Int a deriving Functor
+
+-- | A partition of a bunch of boxeds, each part wrapped in a boxed itself. 
+-- For each 'bunch of boxeds', the number of elements inside is stored as 
+-- well.
+type BoxedPartition a = (WithLength (Boxed [Boxed a]), WithLength (Boxed [Boxed a]))
+
+-- | Generate a list of possible Partitions from a list of boxeds. 
+partitionBoxeds :: (Boxable a) => WithLength [Boxed a] -> [BoxedPartition a]
+partitionBoxeds boxedsWL = map (mapPair (fmap mkBoxed)) $
+    partitionList sortedx ++ partitionList sortedy ++ partitionList sortedz
     where
-        sortedx = S.unstableSortBy (orderingFor f3x) boxeds
-        sortedy = S.unstableSortBy (orderingFor f3y) boxeds
-        sortedz = S.unstableSortBy (orderingFor f3z) boxeds
-        orderingFor fcoord b1 b2 = compare (fcoord $ min b1) (fcoord $ min b2)
+        sortedx = fmap (sortWith (\b -> f3x (min b))) boxedsWL
+        sortedy = fmap (sortWith (\b -> f3y (min b))) boxedsWL
+        sortedz = fmap (sortWith (\b -> f3z (min b))) boxedsWL
         min boxed = boxmin where (Box boxmin boxmax) = box boxed
-
--- | Generate (all) partitions of the given sequence. No trivial partitions 
--- "([], xs)" are created.
--- This runs in O(n log n) time with n the length of the sequence.
-partitionSeq :: S.Seq a -> [(S.Seq a, S.Seq a)]
-partitionSeq xs
-    | n < 2     = []
-    | otherwise = map (\i -> S.splitAt i xs) [1 .. n-1]
-    where n = S.length xs
-
-{-
--- | Generate (all) partitions of the given sequence. No trivial partitions 
--- "([], xs)" are created.
--- This runs in O(n) time with n the length of the sequence, potentially 
--- with a large constant factor and GC action.
-partitionSeq :: S.Seq a -> [(S.Seq a, S.Seq a)]
-partitionSeq = (map $ mapPair S.fromList) . partitionList . toList
-
--- | No trivial partitions "([], xs)" are created.
-partitionList :: [a] -> [([a], [a])]
-partitionList [] = []
-partitionList (x:xs) = partitionList' [x] xs
-    where
-        partitionList' xs []     = []
-        partitionList' xs (y:ys) = (xs,(y:ys)) : partitionList' (y:xs) ys
-        -}
-
 
 mapPair :: (a -> b) -> (a, a) -> (b, b)
 mapPair f (x, y) = (f x, f y)
 
+-- | No trivial partitions "((0,[]), (n,xs))" are created.
+partitionList :: WithLength [a] -> [(WithLength [a], WithLength [a])]
+partitionList (WL 0 []) = []
+partitionList (WL n (x:xs)) = partitionList' (WL 1 [x]) (WL (n - 1) xs)
+    where
+        partitionList' (WL n1 xs) (WL 0  [])   = []
+        partitionList' (WL n1 xs) (WL n2 (y:ys)) = (WL n1 xs, WL n2 (y:ys)) :
+                            partitionList' (WL (n1 + 1) (y:xs)) (WL (n2 - 1) ys)
+
+
 costOfPartition :: BoxedPartition a -> Flt
-costOfPartition (bp1, bp2) = 
-    (halfSurfaceArea $ box bp1) * (fromIntegral $ S.length $ unbox bp1)
-    + (halfSurfaceArea $ box bp2) * (fromIntegral $ S.length $ unbox bp2)
+costOfPartition ((WL n1 b1), (WL n2 b2)) = 
+    (halfSurfaceArea $ box b1) * (fromIntegral n1)
+    + (halfSurfaceArea $ box b2) * (fromIntegral n2)
     where 
         halfSurfaceArea (Box p1 p2) = x*y + y*z + z*x
             where (F3 x y z) = p2 .-. p1
