@@ -2,7 +2,7 @@ all: main
 
 #TODO: test -flto performance
 #OPTS_C=-optc-O3 -opta-march=native -optc-march=native -optl-march-native -optc-ffast-math -optc-mfpmath=sse -optc-msse4
-OPTS_C=-optc-O4 -optc-flto -opta-march=native -optc-march=native -optl-march-native -optc-ffast-math -optc-mfpmath=sse -optc-msse4
+OPTS_C=-optc-O4 -optc-flto -optl-O4 -optl-flto -opta-march=native -optc-march=native -optl-march-native -optc-ffast-math -optc-mfpmath=sse -optc-msse4
 
 LLVM_FP=-optlo-enable-unsafe-fp-math -optlc-enable-unsafe-fp-math -optlo-enable-no-nans-fp-math -optlo-enable-fp-mad
 
@@ -45,8 +45,10 @@ prof:
 	evince Main.ps
 
 test:
-	ghc ${OPTS_QUICK} --make MathTest.hs
-	./MathTest
+	ghc ${OPTS_QUICK} --make Test.hs
+	./Test
+
+.PHONY: test
 
 clean:
 	rm -f *hi *hc *o *prof
