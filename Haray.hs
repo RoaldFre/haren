@@ -236,8 +236,8 @@ buildBVH n xs = buildBVH' $ WL (length xs) xs
         buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
         buildBVH' withLength@(WL l xs)
            | l <= n    = BVHleaf xs
-           | otherwise = case bestPartition $ partitionBoxeds withLength of
-           -- | otherwise = case bestPartition $ partitionBoxedsFast withLength of
+           -- | otherwise = case bestPartition $ partitionBoxeds withLength of
+           | otherwise = case bestPartition $ partitionBoxedsFast withLength of
                 Nothing       -> BVHleaf xs
                 Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
                                          (buildBVH' <$> swapBoxedAndWithLength p2)
@@ -455,6 +455,9 @@ colorPure int incidentLights pureMat@(PureMaterial matType matCol) = do
     return $ matCol .***. total 
 
 colorMaterialType :: Intersection -> MaterialType -> IncidentLight -> RayTracer Color
+colorMaterialType int (Texture f) (ilDir, ilCol) = case intTexUV int of
+    Nothing -> error "Trying to map texture on something without texture coordinates!"
+    Just uv -> return $ (ilCol .***. f uv) .* (ilDir .*. (intNorm int))
 colorMaterialType int Diffuse (ilDir, ilCol) =
     return $ ilCol .* (ilDir .*. (intNorm int))
 colorMaterialType int (Phong p) (ilDir, ilCol) =

@@ -9,17 +9,28 @@ import qualified Data.Foldable as F
 import qualified Data.Sequence as S
 
 
+type Tex = (Pt2 -> Color)
+instance Show Tex where
+    show _ = "<<Texture>>"
+
 data MaterialType = Diffuse
         | Phong Flt      -- ^ Phong exponent
         | Reflecting
         | Glossy Flt Int -- ^ Glossiness and number of samples
         | Refracting Flt -- ^ index of refraction
+        | Texture Tex -- ^ function of (u,v) to colors, u and v in [0,1]
         deriving Show
 data PureMaterial = PureMaterial MaterialType Color deriving Show
 newtype MaterialComponent = MaterialComponent (Flt, PureMaterial) deriving Show
 type Material = [MaterialComponent]
 
-
+checkers :: Color -> Color -> Int -> Int -> Tex
+checkers c1 c2 nu nv (F2 u v)
+    | uParity + vParity == 1  =  c1
+    | otherwise               =  c2
+    where
+        uParity = (floor $ (fromIntegral nu) * u) `mod` 2
+        vParity = (floor $ (fromIntegral nv) * v) `mod` 2
 
 
 data Ray = Ray {
@@ -36,12 +47,12 @@ data Ray = Ray {
 
 -- TODO strict?
 data Intersection = Intersection {
-        intPos     :: Pt3,     -- ^ Position of the intersection
-        intDist    :: Flt,     -- ^ Distance of the (last) intersecting ray
-        intTotDist :: Flt,     -- ^ Total accumulated distance traveled by rays till we got here
-        intDir     :: Vec3,    -- ^ Direction of intersecting ray, *NOT* normalised
-        intNorm    :: UVec3,   -- ^ Normal vector of intersection surface, normalised
-        -- intLocalPos :: Maybe Pt3 -- ^ Needed for texture mapping
+        intPos     :: Pt3,       -- ^ Position of the intersection
+        intDist    :: Flt,       -- ^ Distance of the (last) intersecting ray
+        intTotDist :: Flt,       -- ^ Total accumulated distance traveled by rays till we got here
+        intDir     :: Vec3,      -- ^ Direction of intersecting ray, *NOT* normalised
+        intNorm    :: UVec3,     -- ^ Normal vector of intersection surface, normalised
+        intTexUV   :: Maybe Pt2, -- ^ Texture coordinate
     -- Note to self: Keep intMat this as the last element to use some curry 
     -- tricks. TODO nicer alternative?
         intMat  :: Material -- ^ Material of intersection surface
@@ -54,9 +65,9 @@ instance Ord Intersection where
 instance Eq Intersection where
     i1 == i2  =  intDist i1 == intDist i2
 
-makeIntersection :: Ray -> Flt -> UVec3 -> Material -> Intersection
-makeIntersection ray dist normal mat = 
-    Intersection (walk ray dist) dist (dist + (rayDist ray)) (rayDir ray) normal mat
+makeIntersection :: Ray -> Flt -> UVec3 -> Maybe Pt2 -> Material -> Intersection
+makeIntersection ray dist normal texcoord mat = 
+    Intersection (walk ray dist) dist (dist + (rayDist ray)) (rayDir ray) normal texcoord mat
 
 
 
@@ -79,7 +90,7 @@ data Sphere = Sphere deriving Show
 instance Geometry Sphere where
     boundingBox Sphere = Box (F3 (-1) (-1) (-1)) (F3 1 1 1)
     intersectGeom Sphere ray@(Ray e d min max _) =
-        [makeIntersection ray t (sphereNormal t) | t <- ts, min < t, t < max]
+        [makeIntersection ray t (sphereNormal t) Nothing | t <- ts, min < t, t < max]
         where
             ts = solveQuadEq
                     (d .*. d)
@@ -139,7 +150,7 @@ instance Geometry Triangle where
         | t < min   || t > max          = []
         | gamma < 0 || gamma > 1        = []
         | beta < 0  || beta > 1 - gamma = []
-        | otherwise                     = [makeIntersection ray t n]
+        | otherwise                     = [makeIntersection ray t n Nothing]
         where
             -- e + t*d = o + beta*(-d1) + gamma*(-d2)
             F3 t beta gamma = solve3x3 (M3 d d1 d2) diff
@@ -169,7 +180,7 @@ instance Geometry Plane where
         | t < min   || t > max   = []
         | gamma < 0 || gamma > 1 = []
         | beta < 0  || beta > 1  = []
-        | otherwise              = [makeIntersection ray t n | n <- ns]
+        | otherwise              = [makeIntersection ray t n (Just $ F2 beta gamma)| n <- ns]
         where
             -- e + t*d = o + beta*d1 + gamma*d2
             F3 t beta gamma = solve3x3 (M3 ((-1)*.d) d1 d2) (e .-. o)
