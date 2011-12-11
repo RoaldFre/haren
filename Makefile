@@ -44,11 +44,11 @@ prof:
 	hp2ps -e8in -c Main.hp
 	evince Main.ps
 
-test:
-	ghc ${OPTS_QUICK} --make Test.hs
-	./Test
+harastest:
+	ghc ${OPTS_QUICK} --make HarasTest.hs
+	./HarasTest
 
-.PHONY: test
+.PHONY: harastest
 
 clean:
-	rm -f *hi *hc *o *prof
+	rm -f *hi *hc *o *prof *aux

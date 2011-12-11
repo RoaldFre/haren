@@ -4,4 +4,9 @@ Haray
 *.hc
 *.o
 *.ppm
+*.png
+*.obj
 *.prof
+*.stderr
+*.hp
+*.ps

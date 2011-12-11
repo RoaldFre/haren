@@ -1,6 +1,4 @@
-{-# LANGUAGE DeriveFunctor, GeneralizedNewtypeDeriving, MultiParamTypeClasses, FlexibleInstances, Rank2Types, UndecidableInstances #-}
--- TODO: UndecidableInstances was needed for the s in
--- instance (Renderer RasterizerConfig) (Rasterizer s) where
+{-# LANGUAGE DeriveFunctor, GeneralizedNewtypeDeriving #-}
 
 -- | Haras: a HAskell RASterizer.
 module Haras where
@@ -20,7 +18,7 @@ import Data.List
 import Control.Applicative
 
 data RasterizerConfig = RasterizerConfig {
-        confRes     :: Resolution, -- TODO, this and cam are shared with rasterizer, not part of raytracer per se
+        confRes     :: Resolution,
         confCam     :: Camera,
         confAmbient :: Color
     } deriving Show
@@ -77,7 +75,8 @@ type Image = UArray (Pixel, ColorChannel) Flt
 
 rasterizeToImage :: TriangleMesh -> Material -> [Light] -> RasterizerConfig -> Image
 rasterizeToImage (TriangleMesh mesh) mat lights conf = runSTUArray $ do
-    raster <- newArray ((Pixel (0, 0), Red), (Pixel (nx-1, ny-1), Blue)) 0 -- TODO 'Red' & 'Blue' .....
+    -- TODO change literals 'Red' & 'Blue' by some way to find max index.....
+    raster <- newArray ((Pixel (0, 0), Red), (Pixel (nx-1, ny-1), Blue)) 0
     zbuffer <- newArray (Pixel (0,0), Pixel (nx-1, ny-1)) (-2)
     let initialState = RasterizerState res ambient lights cam matr raster zbuffer
     evalStateT (fromRZ $ rasterize mat mesh) initialState
@@ -87,14 +86,11 @@ rasterizeToImage (TriangleMesh mesh) mat lights conf = runSTUArray $ do
         ambient = confAmbient conf
         cam = confCam conf
         matr = fullProjectionMatrix cam res
-        --lights  = sLights scene
-        --lights  = [Light (PointSource (F3 0 0 (1000))) white] -- TODO
         fromRZ (RZ computation) = computation
 
 -- Rasterize all the triangles to the raster
 rasterize :: Material -> [Triangle] -> Rasterizer s ()
 rasterize mat triangles = forM_ triangles $ rasterizeTriangle mat
-
 
 -- | (direction pointing *to* the lightsource, color of incident light)
 -- The direction is normalised to unity.
@@ -103,7 +99,7 @@ type IncidentLight = (UVec3, Color)
 -- TODO strict?
 data RasterVertex = RasterVertex {
         rvPos   :: !Pt2,           -- ^ Position in screen space
-        rvDepth :: Flt,            -- ^ Z coordinate
+        rvDepth :: !Flt,           -- ^ Z coordinate
         rvNorm  :: UVec3,          -- ^ Normal (in original world space)
         rvIL    :: [IncidentLight] -- ^ Incident light (world space)
     }
@@ -113,7 +109,7 @@ data RasterTriangle = RasterTriangle RasterVertex RasterVertex RasterVertex
 
 -- | The full perspective projection matrix that takes points from 
 -- worldspace to points in screen coordinates.
--- TODO: Near and far clipping plane hardcoded to 0.01 and 100, resp.
+-- Near and far clipping plane hardcoded to 0.01 and 100, resp.
 fullProjectionMatrix :: Camera -> Resolution -> M4
 fullProjectionMatrix c r = 
     (toScreenM r) .*. (orthoM c r n f) .*. (perspectiveM n f) .*. (viewM c)
@@ -130,7 +126,6 @@ toScreenM (Resolution (nxInt, nyInt)) =
     where
         nx = fromIntegral nxInt
         ny = fromIntegral nyInt
-
 
 -- | Matrix performs an orthographic projection from the ortographic 
 -- viewing volume (situated along the *negative* z axis) to the canonical 
@@ -160,8 +155,6 @@ viewM cam = rotate .*. translate
         translate = trans3M4 $ (-1) *. (camPos cam)
         rotate = mat4 $ matrFromList [u, v, w]
         (u, v, w) = camUVW cam
-
-
 
 
 rasterizeTriangle :: Material -> Triangle -> Rasterizer s ()
@@ -197,43 +190,17 @@ toPixelsAndCoords res (RasterTriangle rv1 rv2 rv3) =
             osp = F2 (-1) (-1) -- off screen point
 
 
-
-{-
-rasterizeTriangle :: Material -> Triangle -> Rasterizer s ()
-rasterizeTriangle mat triangle@(Triangle v1 v2 v3) = do
-    [rv1, rv2, rv3] <- mapM vertexShader [v1, v2, v3]
-    amb <- getAmbient
-    forM_ pixAndBaryCoords (\(p, c) -> do
-        writeColor p $ pixelShader amb (RasterTriangle rv1 rv2 rv3) mat c)
-    where
-        [p1, p2, p3] = map (from3Dto2D . rvPos) [rv1, rv2, rv3]
-        pixels = possiblePixels p1 p2 p3
-        pixAndBaryCoords = mapMaybe pixAndBaryCoord pixels
-        dAlpha = distToLine (p2, p3) p1
-        dBeta  = distToLine (p3, p1) p2
-        dGamma = distToLine (p1, p2) p3
-        pixAndBaryCoord pixel
-            | alpha < 0  ||  beta < 0  ||  gamma < 0 = Nothing
-            | alpha < epsilon  &&  dAlpha * (distToLine (p2, p3) osp) < 0 = Nothing
-            | beta  < epsilon  &&  dBeta  * (distToLine (p3, p1) osp) < 0 = Nothing
-            | gamma < epsilon  &&  dGamma * (distToLine (p1, p2) osp) < 0 = Nothing
-            | otherwise = Just (pixel, (alpha, beta, gamma))
-         where
-            alpha = (distToLine (p2, p3) (pixToPt pixel)) / dAlpha
-            beta  = (distToLine (p3, p1) (pixToPt pixel)) / dBeta
-            gamma = (distToLine (p1, p2) (pixToPt pixel)) / dGamma
-            osp = F2 (-1) (-1) -- off screen point
--}
-
-
 -- | Note: no bounds checks are made when writing!
 writeColor :: Pixel -> (Color, Flt) -> Rasterizer s ()
 writeColor pixel (color, depth) = do
     raster   <- getRaster
     oldDepth <- getDepthAt pixel
-    if depth > oldDepth
-        then RZ $ lift $ writeColorST pixel color raster
-        else return ()
+    if depth <= oldDepth
+        then return ()
+        else do
+            RZ $ lift $ writeColorST pixel color raster
+            zbuf <- getZbuf
+            RZ $ lift $ writeArray zbuf pixel depth
 
 getDepthAt :: Pixel -> Rasterizer s Flt
 getDepthAt pixel = do
@@ -270,7 +237,6 @@ distToLine ((F2 x1 y1), (F2 x2 y2)) (F2 x y) =
 
 
 
-
 -- | Take vertex from world space and transform it to a RasterVertex.
 vertexShader :: Vertex -> Rasterizer s RasterVertex
 vertexShader vertex = do
@@ -296,11 +262,11 @@ pixelShader :: Color -> RasterTriangle -> Material -> (Flt, Flt, Flt) -> (Color,
 pixelShader ambient (RasterTriangle v1 v2 v3) mat (a, b, c) =
     (shading ambient mat norm incidentLight, depth)
     where
-        norm = interpolate (rvNorm v1) (rvNorm v2) (rvNorm v3)
+        norm = normalize $ interpolate (rvNorm v1) (rvNorm v2) (rvNorm v3)
         depth = a*(rvDepth v1) + b*(rvDepth v2) + c*(rvDepth v3)
         incidentLight = zipWith3 (\(d1,c1) (d2,c2) (d3,c3) -> 
-                            (interpolate d1 d2 d3, interpolate c1 c2 c3)) 
-                            (rvIL v1) (rvIL v2) (rvIL v3)
+                    (normalize $ interpolate d1 d2 d3, interpolate c1 c2 c3)) 
+                    (rvIL v1) (rvIL v2) (rvIL v3)
         interpolate t1 t2 t3 = t1 .* a  .+.  t2 .* b  .+.  t3 .* c
 
 shading :: Color -> Material -> UVec3 -> [IncidentLight] -> Color
@@ -321,9 +287,11 @@ colorPure norm incidentLights pureMat@(PureMaterial matType matCol) =
         --TODO: check normal for correct side
 
 colorMaterialType :: UVec3 -> MaterialType -> IncidentLight -> Color
-colorMaterialType norm Diffuse (ilDir, ilCol) = ilCol .* (ilDir .*. norm) -- TODO test correct side here?
-        --NO: wrong side == don't rasterize AT ALL!
-colorMaterialType _ _ _ = error "Rasterizer only supports diffuse shading!"
+colorMaterialType norm Diffuse (ilDir, ilCol)
+    | projection < 0 = black
+    | otherwise      = ilCol .* projection
+    where projection = ilDir .*. norm
+colorMaterialType _ _ _ = error "Rasterizer only supports diffuse materials!"
 
 
 
