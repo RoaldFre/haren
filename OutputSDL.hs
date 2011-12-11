@@ -28,7 +28,7 @@ renderSDL renderMode scene conf = do
     setCaption "haren" []
     sequence $ run scene conf (renderSDLactions renderMode screen)
     putStrLn "All done!"
-    quitHandler
+    quitHandler screen
 
 renderSDLactions :: (Renderer c m) => RenderMode -> Surface -> m [IO ()]
 renderSDLactions renderMode screen  = do
@@ -68,12 +68,13 @@ pollForQuit = do
         NoEvent -> return ()
         _       -> pollForQuit
 
-quitHandler :: IO ()
-quitHandler = do
+quitHandler :: Surface -> IO ()
+quitHandler screen = do
     e <- waitEvent
     case e of
-        Quit -> return ()
-        otherwise -> quitHandler
+        Quit        -> return ()
+        VideoExpose -> SDL.flip screen
+        otherwise   -> quitHandler screen
 
 
 -- vim: expandtab smarttab sw=4 ts=4
