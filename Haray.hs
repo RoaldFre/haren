@@ -400,7 +400,28 @@ intersectFirst intersectable ray =
         ints -> Just $ minimum ints
         where
             correctSide int = (rayDir ray) .*. (intNorm int) < 0
-            
+
+-- | Stratified sampling
+sampleStratified :: Int -> Int -> RayTracer [(Flt, Flt)]
+sampleStratified ni nj =
+    mapM jitter grid
+    where
+        stepi = 1 / (fromIntegral ni)
+        stepj = 1 / (fromIntegral nj)
+        grid = concat [[(i,j) | i <- steppedSequence ni stepi]
+                              | j <- steppedSequence nj stepj]
+        jitter (i,j) = do
+            di <- getRandomR (0, stepi)
+            dj <- getRandomR (0, stepj)
+            return (i+di, j+dj)
+
+-- | Returns step * [n-1 .. 0]
+steppedSequence :: Int -> Flt -> [Flt]
+steppedSequence 0 _      = []
+steppedSequence num step = steppedSequence' (num-1) [0]
+    where
+        steppedSequence' 0 xs     = xs
+        steppedSequence' n (x:xs) = steppedSequence' (n-1) (x+step:x:xs)
 
 cameraRays :: Pixel -> RayTracer [Ray]
 cameraRays pixel = do
@@ -411,9 +432,8 @@ cameraRays pixel = do
     if num <= 1
         then return $ [cameraRay res cam pixPt]
         else do
-            dis <- getRandomRs num (-0.5, 0.5)
-            djs <- getRandomRs num (-0.5, 0.5)
-            let pts = zipWith (\di dj -> pixPt .+. (F2 di dj)) dis djs
+            rs <- sampleStratified num num
+            let pts = map (\(r1,r2) -> pixPt .+. (F2 r1 r2) .-. (F2 0.5 0.5)) rs
             return $ map (cameraRay res cam) pts
 
 cameraRay :: Resolution -> Camera -> Pt2 -> Ray
@@ -549,12 +569,9 @@ spawnShadowRaysFromType (PointSource lightPos) point = return [ray]
         distance = len diff
         direction = diff ./. distance
         ray = Ray point direction epsilon distance 0
-spawnShadowRaysFromType (Softbox origin dir1 dir2 n) point = do
-    rand1s <- getRandomRs n (0, 1)
-    rand2s <- getRandomRs n (0, 1)
-    let step1s = map (dir1 .*) rand1s
-    let step2s = map (dir2 .*) rand2s
-    let positions = map (origin .+.) $ zipWith (.+.) step1s step2s
+spawnShadowRaysFromType (SoftBox origin dir1 dir2 n1 n2) point = do
+    rands <- sampleStratified n1 n2
+    let positions = map (\(r1, r2) -> origin .+. dir1.*r1 .+. dir2.*r2) rands
     concat <$> sequence [spawnShadowRaysFromType (PointSource pos) point | pos <- positions]
         
 -- | Propagate the given ray from the given light through the scene. Return 
@@ -570,13 +587,13 @@ propagateShadowRay scene light ray =
 
 -- scale to account for multiple lightrays -- TODO: make this nicer
 scaledLightColor :: Light -> Color
-scaledLightColor (Light (Softbox _ _ _ n) col) = col .* (1 / fromIntegral n)
+scaledLightColor (Light (SoftBox _ _ _ n1 n2) col) = col .* (1 / fromIntegral (n1 * n2))
 scaledLightColor (Light _ col) = col
 
 rayTrace :: Pixel -> RayTracer Color
 rayTrace pixel = do
     resetDepth
     num <- getAAsamples
-    cameraRays pixel >>= colorRays num
+    cameraRays pixel >>= colorRays (num*num)
 
 -- vim: expandtab smarttab sw=4 ts=4

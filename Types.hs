@@ -259,9 +259,22 @@ camLookingAt pos lookAt up fovy =
 
 type CoordSyst = (UVec3, UVec3, UVec3)
 
-data LightType = PointSource Pt3    -- ^ Pointsource position
-        | Softbox Pt3 Vec3 Vec3 Int -- ^ Softbox origin side1 side2 numRays
+data LightType = PointSource Pt3        -- ^ Pointsource position
+        | SoftBox Pt3 Vec3 Vec3 Int Int -- ^ SoftBox origin side1 side2 numRays1 numRays2
         deriving Show
+
+-- Distirbute the given number of rays across the surface of the softbox in 
+-- each direction. The resulting number of rays is at least the given 
+-- number here, but potentially more!
+mkSoftBox :: Pt3 -> Vec3 -> Vec3 -> Int -> LightType
+mkSoftBox origin dir1 dir2 totRays = SoftBox origin dir1 dir2 n1 n2
+    where
+        width  = (len dir1)
+        height = (len dir2)
+        averageLength = sqrt (width * height)
+        n  = fromIntegral totRays
+        n1 = ceiling $ (sqrt n) * width / averageLength
+        n2 = ceiling $ (sqrt n) * height / averageLength
 
 data Light = Light {
         lightType  :: LightType,
