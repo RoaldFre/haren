@@ -311,6 +311,7 @@ data Transformation = Identity
                     | Translation Vec3
                     | Rotation Vec3 Flt
                     | Scale Flt Flt Flt
+                    | Transformation `After` Transformation -- Composition
                     deriving Show
 
 -- | Returns matrices for the normal and inverse transformation.
@@ -319,6 +320,10 @@ transfoM4s Identity              = (m4id, m4id)
 transfoM4s (Translation v)       = trans3M4s v
 transfoM4s (Rotation axis angle) = rotM4s axis angle
 transfoM4s (Scale x y z)         = scalexyzM4s x y z
+transfoM4s (t1 `After` t2)       = (m1 .*. m2, m2inv .*. m1inv)
+    where
+        (m1, m1inv) = transfoM4s t1
+        (m2, m2inv) = transfoM4s t2
 
 data Scene = Scene {
         sLights :: [Light],
