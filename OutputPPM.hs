@@ -2,7 +2,6 @@ module OutputPPM (renderPPM) where
 
 import Renderer
 import Math
-import Types
 
 import Control.Applicative
 

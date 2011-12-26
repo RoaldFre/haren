@@ -445,7 +445,19 @@ solve3x3 m@(M3 a b c) v = F3 x y z
         z = (det3 (M3 a b v)) / detm
         detm = det3 m
 
-test = rotM4 f3e1 90
+
+-- | Perturb the given vector with the given perturbations.
+-- An orthonormal basis (u,v,w) is created around the given vector w. For 
+-- each couple (x,y) in the inputlist, a vector (w + x*u + y*v) is 
+-- returned.
+perturb :: [(Flt, Flt)] -> UVec3 -> [UVec3]
+perturb deltas vec = map perturb1 deltas
+    where
+        perturb1 (du, dv) = normalize $ vec .+. u.*du .+. v.*dv
+        u = if (vec .*. f3e1) < 0.8
+                then normalize $ vec .^. f3e1
+                else normalize $ vec .^. f3e2
+        v = vec .^. u
 
 -- vim: expandtab smarttab sw=4 ts=4
 

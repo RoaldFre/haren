@@ -4,7 +4,7 @@
 
 module ObjParser (parseObjFile) where
 
-import Types
+import Geometry.Triangles
 import Math
 
 import qualified Data.Vector.Mutable as MV
