@@ -69,7 +69,7 @@ class (Num x, Fractional x, Show x) => NumTuple x t | t -> x where
     infixr 8 .^
     (.^) :: t -> Int -> x
     v .^ 2 = v `dot` v
-    v .^ _ = error "Can only use .^ to get the square!"
+    _ .^ _ = error "Can only use .^ to get the square!"
 
     equalsWith :: (x -> x -> Bool) -> t -> t -> Bool
     equalsWith f t1 t2 =
@@ -95,6 +95,7 @@ data F4 = F4 {f4x :: !Flt
 instance (NumTuple Flt) F4 where
     tupleToList (F4 x y z w) = [x, y, z, w]
     tupleFromList [x, y, z, w] = F4 x y z w
+    tupleFromList _ = error "Invalid number of elements in list for this tuple!"
 instance Show F4 where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
 instance Eq F4 where
@@ -124,6 +125,7 @@ data F3 = F3 {f3x :: !Flt
 instance (NumTuple Flt) F3 where
     tupleToList (F3 x y z) = [x, y, z]
     tupleFromList [x, y, z] = F3 x y z
+    tupleFromList _ = error "Invalid number of elements in list for this tuple!"
 instance Show F3 where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
 instance Eq F3 where
@@ -173,6 +175,7 @@ data F2 = F2 {f2x :: !Flt
 instance (NumTuple Flt) F2 where
     tupleToList (F2 x y) = [x, y]
     tupleFromList [x, y] = F2 x y
+    tupleFromList _ = error "Invalid number of elements in list for this tuple!"
 instance Show F2 where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
 instance Eq F2 where
@@ -250,6 +253,7 @@ data M3 = M3 !F3 !F3 !F3
 instance (Matrix Flt F3) M3 where
     matrToList (M3 r1 r2 r3) = [r1, r2, r3]
     matrFromList [r1, r2, r3] = M3 r1 r2 r3
+    matrFromList _ = error "Invalid number of elements in list for this matrix!"
 instance Show M3 where
     show = showMatrix 
 instance Eq M3 where
@@ -264,6 +268,7 @@ data M4 = M4 !F4 !F4 !F4 !F4
 instance (Matrix Flt F4) M4 where
     matrToList (M4 r1 r2 r3 r4) = [r1, r2, r3, r4]
     matrFromList [r1, r2, r3, r4] = M4 r1 r2 r3 r4
+    matrFromList _ = error "Invalid number of elements in list for this matrix!"
 instance Show M4 where
     show = showMatrix 
 instance Eq M4 where
@@ -348,13 +353,13 @@ instance Sub M3 where (.-.) = subm
 
 -- | Make a 3D point from a point in homogeneous coordinates
 mkPt3 :: Pt4 -> Pt3
-mkPt3 p@(F4 x y z w) = F3 (x/w) (y/w) (z/w)
+mkPt3 (F4 x y z w) = F3 (x/w) (y/w) (z/w)
 --TODO: split for rasterizer, where w will always be 1 (no perspective, 
 --only translation)?
 
 -- | Make a 3D vector from a vector in homogeneous coordinates
 mkVec3 :: Vec4 -> Vec3
-mkVec3 p@(F4 x y z _) = F3 x y z
+mkVec3 (F4 x y z _) = F3 x y z
 
 -- | Apply the 4x4 matrix to the given 3D point
 multPt :: M4 -> Pt3 -> Pt3
@@ -374,8 +379,8 @@ homV (F3 x y z) = F4 x y z 0
 
 -- | Translation matrix for the given vector in homogeneous coordinates.
 transM4 :: Vec4 -> M4
-transM4 v@(F4 x y z 0) = transpose $ matrFromList [f4e1, f4e2, f4e3, v .+. f4e4]
-transM4 _ = error "Can only translate over a *vector*"
+transM4 v@(F4 _ _ _ 0) = transpose $ matrFromList [f4e1, f4e2, f4e3, v .+. f4e4]
+transM4 _ = error "Can only translate over a *vector*!"
 
 -- | Translation matrix (M, M^-1) for the given vector.
 transM4s :: Vec4 -> (M4, M4)

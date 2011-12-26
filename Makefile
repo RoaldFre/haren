@@ -12,9 +12,8 @@ BACKEND_LLVM_AGRESSIVE=-fllvm -optlo-basicaa -optlo-basiccg -optlo-count-aa -opt
 
 BACKEND=${BACKEND_LLVM_BASIC}
 
-#TODO FIX WARNINGS!
-#COMMON_OPTS=-Wall -rtsopts -threaded -funbox-strict-fields -fexcess-precision -fmax-worker-args=40
-COMMON_OPTS=-rtsopts -threaded -funbox-strict-fields -fexcess-precision -fmax-worker-args=40
+WARNINGS=-Wall -fno-warn-missing-signatures
+COMMON_OPTS=-rtsopts -threaded -funbox-strict-fields -fexcess-precision -fmax-worker-args=40 ${WARNINGS}
 
 OPTS=${COMMON_OPTS} -funfolding-use-threshold=1000 -funfolding-creation-threshold=1000 -fspec-constr-count=64 -fspec-constr-threshold=1000
 
