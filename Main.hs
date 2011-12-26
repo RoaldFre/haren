@@ -25,16 +25,16 @@ main = do
 
 testScene anyGeom = scene
     where
-        matDiff   = MkAnyMat $ ColMat white $ MkAnyMat $ Diffuse
-        matPhong  = MkAnyMat $ ColMat white $ MkAnyMat $ Phong 25
-        matRefl   = MkAnyMat $ Reflecting
-        matGlossyTp = MkAnyMat $ Glossy 0.10 nGlossyTp
-        matGlossyPlane = MkAnyMat $ Glossy 0.08 nGlossyPlane
-        matTexture = MkAnyMat $ Texture $ checkers (0.2 *. white) white 200 1000
-        mat = MkAnyMat $ [matDiff, matPhong]
+        matDiff   = mkDiffuse
+        matPhong  = mkPhong 25
+        matRefl   = mkReflecting
+        matGlossyTp = mkGlossy 0.10 nGlossyTp
+        matGlossyPlane = mkGlossy 0.08 nGlossyPlane
+        matTexture = mkTexture $ checkers (0.2 *. white) white 200 1000
+        mat = combineMats [matDiff, matPhong]
 
         planeGeom = MkAnyGeom $ mkPlane (F3 (-100) 0 (100)) (F3 200 0 0) (F3 0 0 (-1000))
-        planeMat = MkAnyMat [matTexture]
+        planeMat = combineMats [matTexture]
 
         plane = Object planeGeom planeMat
 

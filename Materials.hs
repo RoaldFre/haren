@@ -1,6 +1,17 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
 
-module Materials where
+module Materials (
+    mkDiffuse,
+    mkPhong,
+    mkReflecting,
+    mkGlossy,
+    mkDielectric,
+    mkTexture, checkers, Tex,
+
+    colorMat,
+    scaleMat,
+    combineMats
+) where
 
 import Haray
 import Ray
@@ -12,11 +23,28 @@ import Control.Applicative
 import Data.List hiding (transpose, intersect)
 
 data Diffuse    = Diffuse deriving Show
+mkDiffuse :: AnyMat
+mkDiffuse = MkAnyMat Diffuse
+
 data Phong      = Phong Flt deriving Show           -- ^ Phong exponent
+mkPhong :: Flt -> AnyMat
+mkPhong phongExponent = MkAnyMat $ Phong phongExponent
+
 data Reflecting = Reflecting deriving Show
+mkReflecting :: AnyMat
+mkReflecting = MkAnyMat Reflecting
+
 data Glossy     = Glossy Flt Int deriving Show      -- ^ Glossiness and number of samples
+mkGlossy :: Flt -> Int -> AnyMat
+mkGlossy glossiness samples = MkAnyMat $ Glossy glossiness samples
+
 data Dielectric = Dielectric Flt deriving Show      -- ^ index of refraction
+mkDielectric :: Flt -> AnyMat
+mkDielectric n = MkAnyMat $ Dielectric n
+
 data Texture    = Texture Tex deriving Show
+mkTexture :: Tex -> AnyMat
+mkTexture texture = MkAnyMat $ Texture texture
 
 type Tex = (Pt2 -> Color) -- ^ function of (u,v) to colors, u and v in [0,1]
 instance Show Tex where
@@ -139,20 +167,30 @@ mkRefractedRay int n
 
 
 
-data ColoredMaterial = ColMat Color AnyMat deriving Show -- ^ Modulate the material with the given color
-type WeightedMaterial = (Flt, AnyMat)
-type CombinedMaterial = [AnyMat]
+newtype ColoredMat = ColoredMat (Color, AnyMat) deriving Show
+-- | Modulate the material with the given color
+colorMat :: Color -> AnyMat -> AnyMat
+colorMat col mat = MkAnyMat $ ColoredMat (col, mat)
 
-instance Material ColoredMaterial where
-    colorMaterial int (ColMat col mat) incidentLights =
+newtype ScaledMat = ScaledMat (Flt, AnyMat) deriving Show
+-- | Scale the material with the given weight
+scaleMat :: Flt -> AnyMat -> AnyMat
+scaleMat weight mat = MkAnyMat $ ScaledMat (weight, mat)
+
+newtype CombinedMat = CombinedMat [AnyMat] deriving Show
+combineMats :: [AnyMat] -> AnyMat
+combineMats mats = MkAnyMat $ CombinedMat mats
+
+instance Material ColoredMat where
+    colorMaterial int (ColoredMat (col, mat)) incidentLights =
         (col .***.) <$> colorMaterial int mat incidentLights
 
-instance Material WeightedMaterial where
-    colorMaterial int (weight, mat) incidentLights =
+instance Material ScaledMat where
+    colorMaterial int (ScaledMat (weight, mat)) incidentLights =
         (weight *.) <$> colorMaterial int mat incidentLights
 
-instance Material CombinedMaterial where
-    colorMaterial int materials incidentLights = do
+instance Material CombinedMat where
+    colorMaterial int (CombinedMat materials) incidentLights = do
         contributions <- mapM (\m -> colorMaterial int m incidentLights) materials
         return $ foldl' (.+.) black contributions
 
