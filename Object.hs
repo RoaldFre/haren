@@ -13,7 +13,6 @@ module Object (
 import Geometry
 import Material
 import Boxes
-import Intersection
 
 data Object = Object {
     objGeom :: AnyGeom,
@@ -21,7 +20,7 @@ data Object = Object {
 } deriving Show
 
 instance (Intersectable Object) Object where
-    intersect ray o@(Object geom mat) = map (Intersection o) $ intersectGeom geom ray
+    intersect ray obj = map (Intersection obj) $ intersectGeom (objGeom obj) ray
 
 instance Boxable Object where
     box obj = box $ objGeom obj

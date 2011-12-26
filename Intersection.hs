@@ -10,7 +10,6 @@ module Intersection (
     module Ray,
 ) where
 
-import Math
 import Ray
 import Geometry
 

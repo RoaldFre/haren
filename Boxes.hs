@@ -8,7 +8,10 @@ import Ray
 import Data.List
 
 -- | Axis aligned box.
-data Box = Box !Pt3 !Pt3 deriving Show
+data Box = Box {
+        boxMin :: !Pt3,
+        boxMax :: !Pt3
+    } deriving Show
 
 getBoxVertices :: Box -> [Pt3]
 getBoxVertices (Box p1 p2) = [p1 .+. (F3 x y z) | x <- [0, f3x (p2 .-. p1)], 
@@ -29,14 +32,14 @@ instance Boxable Pt3 where
         where eps = epsilon *. (F3 1 1 1)
 
 instance (Boxable a, Boxable b) => Boxable (a, b) where
-    box (a, b) = Box min max
+    box (a, b) = Box lo hi
      where
-        Box min1 max1 = box a
-        Box min2 max2 = box b
-        min = tupleFromList $ zipWith minim (tupleToList min1) (tupleToList min2)
-        max = tupleFromList $ zipWith maxim (tupleToList max1) (tupleToList max2)
-        minim a b = if a < b then a else b
-        maxim a b = if a > b then a else b
+        Box lo1 hi1 = box a
+        Box lo2 hi2 = box b
+        lo = tupleFromList $ zipWith min2 (tupleToList lo1) (tupleToList lo2)
+        hi = tupleFromList $ zipWith max2 (tupleToList hi1) (tupleToList hi2)
+        min2 x y = if x < y then x else y
+        max2 x y = if x > y then x else y
 
 instance (Boxable a) => Boxable [a] where
     box [] = error "Can't box an empty list of boxables!"

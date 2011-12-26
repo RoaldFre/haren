@@ -11,7 +11,7 @@ import qualified Data.Vector.Mutable as MV
 import Control.Monad.ST
 import Control.Monad.Trans.Class (lift)
 import qualified Data.ByteString.Lazy as BS
-import Text.Parsec.ByteString.Lazy
+import Text.Parsec.ByteString.Lazy()
 import Text.Parsec.Prim
 import Text.Parsec.Char
 import Text.Parsec.Combinator
@@ -37,24 +37,8 @@ parseObjFile filepath = do
             runPT objFileParser state filepath input
 
     case result of
-        (Left error) -> fail $ show error
+        (Left err) -> fail $ show err
         (Right mesh) -> return $! mesh
-
-test filepath = do
-    input <- BS.readFile filepath
-
-    let result = runST $ do
-            state <- initialState
-            runPT objFileParserTest state filepath input
-
-    case result of
-        (Left error) -> fail $ show error
-        (Right mesh) -> return $! mesh
-    
-objFileParserTest = do
-    res <- slashedInts
-    eol
-    return res
 
 objFileParser :: ObjParser s TriangleMesh
 objFileParser = do
@@ -101,7 +85,7 @@ vertex = do
 -- | Parses a face. Only triangles are supported (for now).
 face :: ObjParser s ()
 face = do
-    char 'f'
+    _  <- char 'f'
     xs <- spaces1 >> slashedInts
     ys <- spaces1 >> slashedInts
     zs <- spaces1 >> slashedInts
@@ -114,7 +98,7 @@ face = do
 -- | Texture coordinates are ignored and per-vertex normals are 
 -- mandatory for now.
 makeTriangle :: ([Int], [Maybe Int], [Maybe Int]) -> ObjParser s Triangle
-makeTriangle (vertexIdxs, maybeTextureIdxs, maybeNormalIdxs) = do
+makeTriangle (vertexIdxs, _maybeTextureIdxs, maybeNormalIdxs) = do
     st <- getState
     positions <- mapM (\i -> lift $ MV.read (stVertices st) (i-1)) vertexIdxs
     normals <- mapM (\i -> lift $ MV.read (stNormals st) (i-1)) $ catMaybes maybeNormalIdxs
@@ -159,27 +143,26 @@ int :: (Monad m) => (ParsecT BS.ByteString u m) Int
 int = fmap read $ many1 digit
 
 addVertex :: Pt3 -> ObjParser s ()
-addVertex vertex = do
+addVertex vert = do
     st <- getState
-    newVertices <- setElement vertex (stVertices st) (stNumVert st)
+    newVertices <- setElement vert (stVertices st) (stNumVert st)
     setState $ st {stVertices = newVertices, stNumVert = 1 + (stNumVert st)}
 
 addNormal :: UVec3 -> ObjParser s ()
-addNormal normal = do
+addNormal norm = do
     st <- getState
-    newNormals <- setElement normal (stNormals st) (stNumNorm st)
+    newNormals <- setElement norm (stNormals st) (stNumNorm st)
     setState $ st {stNormals = newNormals, stNumNorm = 1 + (stNumNorm st)}
 
 setElement :: a -> MV.MVector s a -> Int -> ObjParser s (MV.MVector s a)
-setElement elem vector index = lift $ do
+setElement element vector index = lift $ do
     let l = MV.length vector
 
-    let newVec = vector
     newVec <- if l <= index
                 then MV.grow vector l
                 else return vector
 
-    MV.unsafeWrite newVec index elem
+    MV.unsafeWrite newVec index element
     return newVec
 
 

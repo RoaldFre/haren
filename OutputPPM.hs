@@ -26,7 +26,7 @@ headerPPM (Resolution (nx, ny)) =
 
 colorToPPM :: Color -> String
 colorToPPM (Color r g b) = component r ++ " " ++ component g ++ " " ++ component b
-    where component = show . round . (* 255) . min 1 . max 0
+    where component = show . (round :: Flt -> Int) . (* 255) . min 1 . max 0
 
 
 -- vim: expandtab smarttab sw=4 ts=4

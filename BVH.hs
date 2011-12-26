@@ -27,10 +27,15 @@ instance (Show a) => Show (BVH a) where
     show bvh = show' "" bvh
      where
         show' t (BVHleaf []) = t ++ "BVHleaf []"
-        show' t (BVHleaf xs) = t ++ "BVHleaf [\n" ++ showlist (t ++ "        ") xs ++ "\n" ++ t ++ "       ]"
-        show' t (BVHnode l r) = t ++ "BVHnode (\n" ++ show' newt (unbox l) ++ "\n)(\n"
-                                                   ++ show' newt (unbox r) where newt = t ++ "        "
-        showlist t [] = ""
+        show' t (BVHleaf xs) = t ++ "BVHleaf [\n"
+                            ++ showlist (t ++ "        ") xs ++ "\n" 
+                            ++ t ++ "       ]"
+        show' t (BVHnode l r) = t ++ "BVHnode (\n" 
+                            ++ show' newt (unbox l)
+                            ++ "\n)(\n"
+                            ++ show' newt (unbox r) 
+                        where newt = t ++ "        "
+        showlist _ [] = ""
         showlist t [x] = t ++ show x
         showlist t (x:xs) = t ++ show x ++ ",\n" ++ showlist t xs
         --tab = "  "
@@ -73,36 +78,32 @@ buildBVH :: (Boxable a) => Int -> [a] -> BVH a
 buildBVH n xs = buildBVH' $ WL (length xs) (map mkBoxed xs)
     where
         buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
-        buildBVH' withLength@(WL l xs)
-           | l <= n    = BVHleaf xs
-           -- | otherwise = case bestPartition $ partitionBoxeds withLength of
+        buildBVH' withLength@(WL l xs2)
+           | l <= n    = BVHleaf xs2
            | otherwise = case bestPartition $ partitionBoxeds withLength of
-                Nothing       -> BVHleaf xs
+                Nothing       -> BVHleaf xs2
                 Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
                                          (buildBVH' <$> swapBoxedAndWithLength p2)
-        swapBoxedAndWithLength (WL n b) = Boxed (thebox b) (WL n (unbox b))
+        swapBoxedAndWithLength (WL n2 b) = Boxed (thebox b) (WL n2 (unbox b))
 
 --TODO speed up the normal one
 buildBVHfast :: (Boxable a) => Int -> [a] -> BVH a
 buildBVHfast n xs = buildBVH' $ WL (length xs) (map mkBoxed xs)
     where
         buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
-        buildBVH' withLength@(WL l xs)
-           | l <= n    = BVHleaf xs
+        buildBVH' withLength@(WL l xs2)
+           | l <= n    = BVHleaf xs2
            | otherwise = case bestPartition $ partitionBoxedsFast withLength of
-                Nothing       -> BVHleaf xs
+                Nothing       -> BVHleaf xs2
                 Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
                                          (buildBVH' <$> swapBoxedAndWithLength p2)
-        swapBoxedAndWithLength (WL n b) = Boxed (thebox b) (WL n (unbox b))
+        swapBoxedAndWithLength (WL n2 b) = Boxed (thebox b) (WL n2 (unbox b))
 
 
 
 -- | A thingamajing with an associated length of said thingamajing stored 
 -- for O(1) access.
-data WithLength a = WL {
-    wlLength :: Int,
-    fromWL   :: a 
-} deriving Functor
+data WithLength a = WL Int a deriving Functor
 toWL :: [a] -> WithLength [a]
 toWL xs = WL (length xs) xs
 
@@ -116,10 +117,10 @@ partitionBoxeds :: (Boxable a) => WithLength [Boxed a] -> [BoxedPartition a]
 partitionBoxeds boxedsWL = map (mapPair (fmap mkBoxed)) $
     partitionList sortedx ++ partitionList sortedy ++ partitionList sortedz
     where
-        sortedx = fmap (sortWith (\b -> f3x (min b))) boxedsWL
-        sortedy = fmap (sortWith (\b -> f3y (min b))) boxedsWL
-        sortedz = fmap (sortWith (\b -> f3z (min b))) boxedsWL
-        min boxed = boxmin where (Box boxmin boxmax) = box boxed
+        sortedx = sortWith (\b -> f3x (minb b)) <$> boxedsWL
+        sortedy = sortWith (\b -> f3y (minb b)) <$> boxedsWL
+        sortedz = sortWith (\b -> f3z (minb b)) <$> boxedsWL
+        minb = boxMin . box
 
 
 -- Only partitions dividing the three axes in the center are generated (so 
@@ -130,11 +131,11 @@ partitionBoxedsFast (WL 0 [])  = []
 partitionBoxedsFast (WL 1 [_]) = []
 partitionBoxedsFast (WL _ xs)  = map (mapPair (fmap mkBoxed . toWL)) $
                      filter (\(a, b) -> not (null a)  &&  not (null b))
-                        [partition (\b -> f3x (min b) < thresholdx) xs
-                        ,partition (\b -> f3y (min b) < thresholdy) xs
-                        ,partition (\b -> f3z (min b) < thresholdz) xs]
+                        [partition (\b -> f3x (minb b) < thresholdx) xs
+                        ,partition (\b -> f3y (minb b) < thresholdy) xs
+                        ,partition (\b -> f3z (minb b) < thresholdz) xs]
     where
-        min boxed = boxmin where (Box boxmin boxmax) = box boxed
+        minb = boxMin . box
         (Box totalmin totalmax) = box xs
         (F3 thresholdx thresholdy thresholdz) = totalmin .+. (totalmax .* 0.5)
 
@@ -148,9 +149,11 @@ partitionList :: WithLength [a] -> [(WithLength [a], WithLength [a])]
 partitionList (WL 0 []) = []
 partitionList (WL n (x:xs)) = partitionList' (WL 1 [x]) (WL (n - 1) xs)
     where
-        partitionList' (WL n1 xs) (WL 0  [])   = []
-        partitionList' (WL n1 xs) (WL n2 (y:ys)) = (WL n1 xs, WL n2 (y:ys)) :
-                            partitionList' (WL (n1 + 1) (y:xs)) (WL (n2 - 1) ys)
+        partitionList' (WL  _  _) (WL 0  [])   = []
+        partitionList' (WL n1 as) (WL n2 (b:bs)) = (WL n1 as, WL n2 (b:bs)) :
+                            partitionList' (WL (n1 + 1) (b:as)) (WL (n2 - 1) bs)
+        partitionList' _ _ = error "Inconsistent withLengths!"
+partitionList _ = error "Inconsistent withLength!"
 
 
 costOfPartition :: BoxedPartition a -> Flt

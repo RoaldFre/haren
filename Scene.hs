@@ -25,7 +25,7 @@ data ObjectGraph a = Node a (ObjectGraph a)
 -- that sits closest to the root in the tree, the second argument will be 
 -- its child.
 flattenObjectGraph :: (a -> a -> a) -> a -> ObjectGraph a -> [(a, Object)]
-flattenObjectGraph f initial (Leaf obj) = [(initial, obj)]
+flattenObjectGraph _ initial (Leaf obj) = [(initial, obj)]
 flattenObjectGraph f initial (Fork graphs) =
         concatMap (flattenObjectGraph f initial) graphs
 flattenObjectGraph f initial (Node x subGraph) =

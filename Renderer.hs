@@ -46,6 +46,6 @@ resToPix :: Resolution -> Pixel
 resToPix (Resolution pair) = Pixel pair
 
 flipHoriz :: Resolution -> Pixel -> Pixel
-flipHoriz (Resolution (ni, nj)) (Pixel (i, j)) = Pixel (i, nj - j - 1)
+flipHoriz (Resolution (_, nj)) (Pixel (i, j)) = Pixel (i, nj - j - 1)
 
 -- vim: expandtab smarttab sw=4 ts=4

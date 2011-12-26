@@ -45,8 +45,8 @@ instance (Eq a) => Eq (Transformed a) where
 
 
 transformRay :: M4 -> Ray -> Ray
-transformRay trans (Ray origin direction near far dist) =
-    Ray (trans `multPt` origin) (trans `multVec` direction) near far dist
+transformRay trans (Ray origin dir near far dist) =
+    Ray (trans `multPt` origin) (trans `multVec` dir) near far dist
 
 transformInt :: Pt3 -> (M4, M4) -> Intersection t -> Intersection t
 transformInt originalOrigin (trans, invTrans) int =

@@ -14,10 +14,6 @@ import Math
 import Renderer
 import Transform
 import BVH
-import Color
-import Boxes
-
-import Material
 
 
 -- TODO which can be removed?
@@ -31,7 +27,6 @@ import Control.Applicative
 import GHC.Exts
 
 import Prelude hiding (concatMap)
-import Data.Foldable hiding (minimum, maximum, concat, concatMap, foldl')
 
 data RayTraceConfig = RayTraceConfig {
         confDepth     :: Int,
@@ -210,6 +205,7 @@ steppedSequence num step = steppedSequence' (num-1) [0]
     where
         steppedSequence' 0 xs     = xs
         steppedSequence' n (x:xs) = steppedSequence' (n-1) (x+step:x:xs)
+        steppedSequence' _ []     = error "Pigs can fly."
 
 cameraRays :: Pixel -> RayTracer [Ray]
 cameraRays pixel = do
@@ -267,7 +263,7 @@ colorRay ray = do
 --TODO clean this up, check if correct here, merge with the attenuation for 
 --propagating shadow rays -- lose the hack rescale factor
 attenuate :: Flt -> Color -> Color
-attenuate dist col = col ./. dist^2
+attenuate dist col = col ./. (dist * dist)
 
 
 -- | Returns the incident light from the scene that's hitting the given 
@@ -292,15 +288,15 @@ incidentDirectLight1 int light = do
     
 -- | Spawn Rays from the given point to the given light.
 spawnShadowRays :: Light -> Pt3 -> RayTracer [Ray]
-spawnShadowRays (Light lightType _) point = spawnShadowRaysFromType lightType point
+spawnShadowRays (Light lType _) point = spawnShadowRaysFromType lType point
 
 spawnShadowRaysFromType :: LightType -> Pt3 -> RayTracer [Ray]
 spawnShadowRaysFromType (PointSource lightPos) point = return [ray]
     where
         diff = lightPos .-. point
         distance = len diff
-        direction = diff ./. distance
-        ray = Ray point direction epsilon distance 0
+        dir = diff ./. distance
+        ray = Ray point dir epsilon distance 0
 spawnShadowRaysFromType (SoftBox origin dir1 dir2 n1 n2) point = do
     rands <- sampleStratified n1 n2
     let positions = map (\(r1, r2) -> origin .+. dir1.*r1 .+. dir2.*r2) rands
@@ -312,10 +308,10 @@ spawnShadowRaysFromType (SoftBox origin dir1 dir2 n1 n2) point = do
 propagateShadowRay :: ObjIntersectable -> Light -> Ray -> Maybe IncidentLight
 propagateShadowRay scene light ray =
     case (intersect ray scene)::[Intersection Object] of -- TODO better way?
-        [] -> Just (normalize (rayDir ray), color)
+        [] -> Just (normalize (rayDir ray), col)
         _  -> Nothing
     where
-        color = scaledLightColor light
+        col = scaledLightColor light
 
 -- scale to account for multiple lightrays -- TODO: make this nicer
 scaledLightColor :: Light -> Color

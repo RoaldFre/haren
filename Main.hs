@@ -7,32 +7,14 @@ import ObjParser
 import Materials
 import Geometry.Triangles
 import Geometry.Plane
-import Material
-import Materials
-import Color
 import Transform
 import Camera
 import Light
 import Renderer
 
 import OutputSDL
-import OutputPPM
+--import OutputPPM
 
-{--
-import Haras
-import OutputHaras
-
-main = renderImage "ras.ppm" image
-    where
-        image = rasterizeToImage triangle conf
-        triangle = Triangle (Vertex (F3   2   2 0) (F3 0 1 0))
-                            (Vertex (F3   2  95 0) (F3 0 0 1))
-                            (Vertex (F3  95  95 0) (F3 1 0 0))
-        conf = RasterizerConfig (Resolution (100, 100)) black
-
--}
-
---{-
 main = do
     mesh <- parseObjFile "teapot.obj"
     --let optimMesh = optimizeTriangleMesh 10 mesh

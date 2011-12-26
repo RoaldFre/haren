@@ -16,8 +16,8 @@ mkPlane origin dir1 dir2 = Plane origin dir1 dir2 $ normalize $ dir1 .^. dir2
        
 instance Geometry Plane where
     boundingBox (Plane o d1 d2 _) = box [o, o.+.d1, o.+.d2, o.+.d1.+.d2]
-    intersectGeom (Plane o d1 d2 normal) ray@(Ray e d min max _)
-        | t < min   || t > max   = []
+    intersectGeom (Plane o d1 d2 normal) ray@(Ray e d mint maxt _)
+        | t < mint  || t > maxt  = []
         | gamma < 0 || gamma > 1 = []
         | beta < 0  || beta > 1  = []
         | otherwise              = [makeGeomInt ray t n (Just $ F2 beta gamma)| n <- ns]

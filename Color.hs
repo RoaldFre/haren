@@ -14,6 +14,7 @@ data Color = Color {
 instance (NumTuple Flt) Color where
     tupleToList (Color r g b) = [r, g, b]
     tupleFromList [r, g, b] = Color r g b
+    tupleFromList _ = error "Invalid number of elements in list for this color!"
 instance Show Color where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
 instance Mult Color Color Flt where

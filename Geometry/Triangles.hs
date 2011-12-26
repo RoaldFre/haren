@@ -6,10 +6,6 @@ module Geometry.Triangles (
     optimizeTriangleMesh,
     optimizeTriangleMeshFast,
 
-    -- from module Math
-    Pt3(..),
-    UVec3(..),
-
     module Geometry
 ) where
 
@@ -52,11 +48,11 @@ instance Geometry Triangle where
 -}
 --TODO: code below is more slow than code above: :-(
 --{-
-    intersectGeom (Triangle v1 v2 v3) ray@(Ray e d min max _)
+    intersectGeom (Triangle v1 v2 v3) ray@(Ray e d mint maxt _)
         -- | See pp206-208 of Fundamentals of Computer Graphics (Peter 
         -- Shirley, 2nd edition) for algorithm.
 --        | abs m < smallest              = [] -- TODO: use epsilon to do relative compare?
-        | t < min   || t > max          = []
+        | t < mint  || t > maxt         = []
         | gamma < 0 || gamma > 1        = []
         | beta < 0  || beta > 1 - gamma = []
         | otherwise                     = [makeGeomInt ray t n Nothing]
