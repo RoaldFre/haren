@@ -22,9 +22,10 @@ import Data.Maybe
 --import System.Random.Mersenne.Pure64
 import System.Random
 
-import Control.Monad.State
+import Control.Monad.State hiding (state)
 import Control.Applicative
 import GHC.Exts
+import Control.Parallel.Strategies
 
 import Prelude hiding (concatMap)
 
@@ -74,8 +75,12 @@ newtype RayTracer a = RT (State RayTraceState a)
 instance Renderer RayTraceConfig RayTracer where
     colorPixel = rayTrace
     getResolution = getRes
-    run scene conf (RT s) = evalState s (mkInitialState scene conf)
+    run scene conf action = evaluate action $ mkInitialState scene conf
 
+evaluate :: RayTracer a -> RayTraceState -> a
+evaluate (RT action) state = evalState action state
+
+getState     = RT $ get
 getRes       = RT $ gets stateRes
 getLights    = RT $ gets stateLights
 getAmbient   = RT $ gets stateAmbient
@@ -87,13 +92,6 @@ getCam       = RT $ gets stateCam
 resetDepth   = RT $ gets stateMaxDepth >>= \d -> modify (\s -> s {stateDepth = d})
 getRndGen    = RT $ gets stateRndGen
 setRndGen new = RT $ modify (\s -> s {stateRndGen = new})
-
-
-
-
-
-
-
 
 
 
@@ -237,19 +235,17 @@ cameraRay (Resolution (nx, ny)) cam (F2 i j) =
         dir = normalize $ us*.u .+. vs*.v .-. w -- ws = -n = -1
 
 
--- | Calculate the Color of the given ObjIntersection
-color :: ObjIntersection -> RayTracer Color
-color int = do
-    incidentLight <- incidentDirectLight int
-    colorMaterial int (intMat int) incidentLight
-
-
--- | Return the combined color from the rays, divided by the given factor.
+-- | Return the combined color from the rays, divided by the given factor. 
+-- Contributions from individiual rays are calculated in parallel when 
+-- possible.
 colorRays :: Int -> [Ray] -> RayTracer Color
 colorRays n rays = do
-    combined <- foldl' (.+.) black `fmap` mapM colorRay rays
+    currentState <- getState
+    let contributions = parMap rdeepseq (\r -> evaluate (colorRay r) currentState) rays
+    let combined = foldl (.+.) black contributions -- TODO foldl': strict would kill sparks ?
     return $ combined ./. ((fromIntegral n)::Flt)
 
+-- | Compute the color of the given ray.
 colorRay :: Ray -> RayTracer Color
 colorRay ray = do
     scene <- getScene
@@ -259,6 +255,13 @@ colorRay ray = do
         Just int -> fmap (\c -> ambient .+. (attenuate (intTotDist int) c)) $ color int
         --Nothing -> return red
         --Just int -> return white
+
+-- | Calculate the Color of the given ObjIntersection
+color :: ObjIntersection -> RayTracer Color
+color int = do
+    incidentLight <- incidentDirectLight int
+    colorMaterial int (intMat int) incidentLight
+
 
 --TODO clean this up, check if correct here, merge with the attenuation for 
 --propagating shadow rays -- lose the hack rescale factor

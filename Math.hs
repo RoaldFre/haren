@@ -4,6 +4,8 @@
 module Math where
 
 import qualified Data.List as List
+import Control.Parallel.Strategies hiding (dot)
+import Control.DeepSeq
 
 -- floating point format, easily switch between Float and Double
 type Flt = Double
@@ -46,9 +48,12 @@ x1 `equalsEpsilon` x2 =
 -- | Numerical tuples such as points and vectors in arbitrary dimensions.
 -- WARNING: Compile with optimizations and increase the default 
 -- unfolding-use-threshold or this will be *unusably slow*!
-class (Num x, Fractional x, Show x) => NumTuple x t | t -> x where
+class (Num x, Fractional x) => NumTuple x t | t -> x where
     tupleToList   :: t -> [x]
     tupleFromList :: [x] -> t
+
+    -- TODO make this a functor, so I don't constantly have to unwrap and 
+    -- rewrap with to/from list
 
     addt :: t -> t -> t
     t1 `addt` t2 = tupleFromList $ zipWith (+) (tupleToList t1) (tupleToList t2)
@@ -82,8 +87,11 @@ class (Num x, Fractional x, Show x) => NumTuple x t | t -> x where
     equalsWith f t1 t2 =
         List.foldl' (&&) True $ zipWith f (tupleToList t1) (tupleToList t2)
 
-    showTuple :: t -> String
+    showTuple :: (Show x) => t -> String
     showTuple t = show $ tupleToList t
+
+    rnfTuple :: (NFData x) => t -> ()
+    rnfTuple t = (tupleToList t `using` evalList rdeepseq) `seq` ()
 
 --instance forall t x. (NumTuple x t) => Show t where
 --    show = showTuple
@@ -107,6 +115,7 @@ instance Show F4 where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
 instance Eq F4 where
     (==) = equalsWith equalsEpsilon
+instance NFData F4 where rnf = rnfTuple
 
 f4zero = F4 0 0 0 0
 f4e1   = F4 1 0 0 0
@@ -137,6 +146,7 @@ instance Show F3 where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
 instance Eq F3 where
     (==) = equalsWith equalsEpsilon
+instance NFData F3 where rnf = rnfTuple
     
 
 f3zero = F3 0 0 0
@@ -187,6 +197,7 @@ instance Show F2 where
     show = showTuple -- TODO: specify this somehow at the level of NumTuple
 instance Eq F2 where
     (==) = equalsWith equalsEpsilon
+instance NFData F2 where rnf = rnfTuple
 
 f2zero = F2 0 0
 f2e1   = F2 1 0
@@ -212,7 +223,7 @@ from3Dto2D (F3 x y _) = F2 x y
 --
 -- TODO: this can be generalised to arbitrary rank tensors, which will 
 -- unify this and the tuple code above into one tidy package :P
-class (Num x, Fractional x, Show x, Show t, NumTuple x t) => 
+class (Num x, Fractional x, NumTuple x t) => 
                         Matrix x t m | t -> x, m -> x, m -> t, t -> m where
     matrToList   :: m -> [t]
     matrFromList :: [t] -> m
@@ -250,8 +261,11 @@ class (Num x, Fractional x, Show x, Show t, NumTuple x t) =>
     scalemLeft :: x -> m -> m
     x `scalemLeft` m = m `scalemRight` x
 
-    showMatrix :: m -> String
+    showMatrix :: (Show t) => m -> String
     showMatrix m = show $ matrToList m
+
+    rnfMatrix :: (NFData t) => m -> ()
+    rnfMatrix m = (matrToList m `using` evalList rdeepseq) `seq` ()
 
 
 -- | 3x3 Matrix. M3 row1 row2 row3
@@ -265,6 +279,7 @@ instance Show M3 where
     show = showMatrix 
 instance Eq M3 where
     m1 == m2 = (matrToList m1) == (matrToList m2)
+instance NFData M3 where rnf = rnfMatrix
 
 m3id = matrFromList [f3e1, f3e2, f3e3]
 
@@ -280,6 +295,7 @@ instance Show M4 where
     show = showMatrix 
 instance Eq M4 where
     m1 == m2 = (matrToList m1) == (matrToList m2)
+instance NFData M4 where rnf = rnfMatrix
 
 m4id = matrFromList [f4e1, f4e2, f4e3, f4e4]
 

@@ -3,6 +3,8 @@
 module Color where
 
 import Math
+import Control.Parallel.Strategies hiding (dot)
+import Control.DeepSeq
 
 -- | Lazy RGB triplet, components in the range [0..1].
 data Color = Color {
@@ -24,6 +26,7 @@ instance Mult Flt Color Color where (.*.) = (*.)
 instance Div Color Flt
 instance Add Color where (.+.) = addt
 instance Sub Color where (.-.) = subt
+instance NFData Color where rnf = rnfTuple
 
 black = Color 0 0 0
 white = Color 1 1 1
