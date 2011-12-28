@@ -1,9 +1,11 @@
 module Geometry.Sphere (
-    Sphere(..)
+    Sphere(..),
     module Geometry
 ) where
 
 import Geometry
+import Math
+import Boxes
 
 -- | Sphere with radius 1 at origin
 data Sphere = Sphere deriving Show
