@@ -21,7 +21,7 @@ OPTS_QUICK=${COMMON_OPTS} -O2 -funfolding-use-threshold=200 -funfolding-creation
 
 
 main:
-	ghc ${OPTS_QUICK} ${BACKEND} --make Main
+	ghc ${OPTS} ${BACKEND} --make Main
 force:
 	ghc ${OPTS_QUICK} ${BACKEND} --make -fforce-recomp Main
 perf:
