@@ -1,15 +1,16 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, MultiParamTypeClasses, DeriveFunctor #-}
 
 module Transform (
-    transfoM4s, --TODO remove
     Transformation(..),
-    Transformed(..), -- TODO can be hidden altogether?
+    TransformationGraph,
+    flattenTransfoGraph,
 ) where
 
 import Geometry
 import Intersection
 import Boxes
 import Math
+import Graph
 
 data Transformation = Identity
                     | Translation Vec3
@@ -33,9 +34,9 @@ transfoM4s (t1 `After` t2)       = (m1 .*. m2, m2inv .*. m1inv)
 -- | Transformed thingamajings, represented by transformations and the 
 -- untransformed thingamajing.
 data Transformed a = Transformed {
-        tTrans    :: M4,
-        tInvTrans :: M4,
-        tOriginal :: a
+        tTrans     :: M4,
+        _tInvTrans :: M4,
+        tOriginal  :: a
     } deriving (Show, Functor)
 instance (Ord a) => Ord (Transformed a) where
     t1 <= t2  =  (tOriginal t1) <= (tOriginal t2)
@@ -73,5 +74,15 @@ instance (Boxable a) => Boxable (Transformed a) where
 transformBox :: M4 -> Box -> Box
 transformBox trans b = box $ map (trans `multPt`) $ getBoxVertices b
 
+
+-- Graph
+type TransformationGraph l = Graph l Transformation
+flattenTransfoGraph :: TransformationGraph l -> [Transformed l]
+flattenTransfoGraph graph = 
+    map mkTrans $ flattenGraph multTuples (m4id, m4id) matricesGraph
+    where
+        mkTrans ((m,mInv), leaf) = Transformed m mInv leaf
+        multTuples (a, b) (x, y) = (a .*. x, b .*. y)
+        matricesGraph = transfoM4s `fmap` graph
 
 -- vim: expandtab smarttab sw=4 ts=4
