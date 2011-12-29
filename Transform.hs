@@ -26,7 +26,7 @@ transfoM4s :: Transformation -> (M4, M4)
 transfoM4s Identity              = (m4id, m4id)
 transfoM4s (Translation v)       = trans3M4s v
 transfoM4s (Rotation axis angle) = rotM4s axis angle
-transfoM4s (Scale factor)        = scaleM4s factor
+transfoM4s (Scale factor)        = transfoM4s $ ScaleXYZ factor factor factor
 transfoM4s (ScaleXYZ x y z)      = scalexyzM4s x y z
 transfoM4s (t1 `After` t2)       = (m1 .*. m2, m2inv .*. m1inv)
     where
