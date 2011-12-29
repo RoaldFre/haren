@@ -83,6 +83,10 @@ class (Num x, Fractional x) => NumTuple x t | t -> x where
     v .^ 2 = v `dot` v
     _ .^ _ = error "Can only use .^ to get the square!"
 
+    -- | Inverts the given tuple. Equivalent to (*.) (-1)
+    inv :: t -> t
+    inv = (*.) (-1)
+
     equalsWith :: (x -> x -> Bool) -> t -> t -> Bool
     equalsWith f t1 t2 =
         List.foldl' (&&) True $ zipWith f (tupleToList t1) (tupleToList t2)
