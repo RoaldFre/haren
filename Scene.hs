@@ -1,35 +1,35 @@
-{-# LANGUAGE MultiParamTypeClasses, DeriveFunctor #-}
+module Scene (
+    Scene(..),
+    ObjectGraph,
+    SceneGraph,
+    TransformedObj,
+    flattenSceneGraph,
 
-module Scene where
+    module Graph
+) where
 
+import Graph
 import Object
 import Light
 import Transform
+import Math
 
 data Scene = Scene {
         sLights :: [Light],
         sGraph  :: SceneGraph
     } deriving Show
 
+type ObjectGraph = Graph Object
 type SceneGraph = ObjectGraph Transformation
 
-data ObjectGraph a = Node a (ObjectGraph a)
-                   | Fork [ObjectGraph a]
-                   | Leaf Object
-                   deriving (Show, Functor)
+type TransformedObj = Transformed Object
 
--- | Flatten or 'fold' the object graph starting with the given initial 
--- value and proceeding with the given folding function. If the graph 
--- contains loops, the resulting list will be infinite.
--- The first argument given to the supplied function will be the object 
--- that sits closest to the root in the tree, the second argument will be 
--- its child.
-flattenObjectGraph :: (a -> a -> a) -> a -> ObjectGraph a -> [(a, Object)]
-flattenObjectGraph _ initial (Leaf obj) = [(initial, obj)]
-flattenObjectGraph f initial (Fork graphs) =
-        concatMap (flattenObjectGraph f initial) graphs
-flattenObjectGraph f initial (Node x subGraph) =
-        flattenObjectGraph f (f initial x) subGraph
-
+flattenSceneGraph :: SceneGraph -> [TransformedObj]
+flattenSceneGraph sceneGraph = 
+    map mkTransObj $ flattenGraph multTuples (m4id, m4id) matricesGraph
+    where
+        mkTransObj ((m,mInv), obj) = Transformed m mInv obj
+        multTuples (a, b) (x, y) = (a .*. x, b .*. y)
+        matricesGraph = transfoM4s `fmap` sceneGraph
 
 -- vim: expandtab smarttab sw=4 ts=4

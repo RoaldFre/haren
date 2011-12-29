@@ -99,7 +99,7 @@ instance Material Dielectric where
                 colorRay (fromJust refractedRay)
             else
                 case refractedRay of
-                    Just refrRay -> return green -- colorRay refrRay
+                    Just refrRay -> black `orRecurseOn` colorRay refrRay
                     Nothing      -> return red -- total internal reflection
 
 

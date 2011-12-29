@@ -12,7 +12,6 @@ import Object
 import Light
 import Math
 import Renderer
-import Transform
 import BVH
 
 
@@ -96,17 +95,6 @@ setRndGen new = RT $ modify (\s -> s {stateRndGen = new})
 
 
 
-
--- TODO best to define this here, or somethere else?
-type TransformedObj = Transformed Object
-
-flattenSceneGraph :: SceneGraph -> [TransformedObj]
-flattenSceneGraph sceneGraph = 
-    map mkTransObj $ flattenObjectGraph multTuples (m4id, m4id) matricesGraph
-    where
-        mkTransObj ((m,mInv), obj) = Transformed m mInv obj
-        multTuples (a, b) (x, y) = (a .*. x, b .*. y)
-        matricesGraph = transfoM4s `fmap` sceneGraph
 
 
 
@@ -259,7 +247,7 @@ colorRay ray = do
 -- | Calculate the Color of the given ObjIntersection
 color :: ObjIntersection -> RayTracer Color
 color int = do
-    incidentLight <- incidentDirectLight int
+    incidentLight <- incidentDirectLight int -- TODO is this sufficiently lazy (at all??)
     colorMaterial int (intMat int) incidentLight
 
 
