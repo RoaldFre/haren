@@ -92,7 +92,20 @@ resetDepth   = RT $ gets stateMaxDepth >>= \d -> modify (\s -> s {stateDepth = d
 getRndGen    = RT $ gets stateRndGen
 setRndGen new = RT $ modify (\s -> s {stateRndGen = new})
 
+-- | Return an infinite list of raytracer states that are a copy of the 
+-- current one, but each one has a new random generator seed
+forkStates :: RayTracer [RayTraceState]
+forkStates = do
+    currentState <- getState
+    let generators = splitGenerators $ stateRndGen currentState
+    setRndGen $ head generators
+    return [currentState {stateRndGen = g} | g <- tail generators]
 
+-- | Return an infinite list of random generators that were split off from 
+-- the given one.
+splitGenerators :: RandomGen g => g -> [g]
+splitGenerators g = g1 : splitGenerators g2
+    where (g1, g2) = split g
 
 
 
@@ -228,8 +241,8 @@ cameraRay (Resolution (nx, ny)) cam (F2 i j) =
 -- possible.
 colorRays :: Int -> [Ray] -> RayTracer Color
 colorRays n rays = do
-    currentState <- getState
-    let contributions = parMap rdeepseq (\r -> evaluate (colorRay r) currentState) rays
+    states <- forkStates
+    let contributions = parMap rdeepseq (\(r, s) -> evaluate (colorRay r) s) $ zip rays states
     let combined = foldl (.+.) black contributions -- TODO foldl': strict would kill sparks ?
     return $ combined ./. ((fromIntegral n)::Flt)
 
