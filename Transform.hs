@@ -1,12 +1,15 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, MultiParamTypeClasses, DeriveFunctor #-}
 
-module Transform where
+module Transform (
+    transfoM4s, --TODO remove
+    Transformation(..),
+    Transformed(..), -- TODO can be hidden altogether?
+) where
 
 import Geometry
 import Intersection
 import Boxes
 import Math
-
 
 data Transformation = Identity
                     | Translation Vec3
@@ -27,8 +30,6 @@ transfoM4s (t1 `After` t2)       = (m1 .*. m2, m2inv .*. m1inv)
         (m2, m2inv) = transfoM4s t2
 
 
-
-
 -- | Transformed thingamajings, represented by transformations and the 
 -- untransformed thingamajing.
 data Transformed a = Transformed {
@@ -36,13 +37,19 @@ data Transformed a = Transformed {
         tInvTrans :: M4,
         tOriginal :: a
     } deriving (Show, Functor)
-
 instance (Ord a) => Ord (Transformed a) where
     t1 <= t2  =  (tOriginal t1) <= (tOriginal t2)
 -- Prerequisite for Ord...
 instance (Eq a) => Eq (Transformed a) where
     t1 == t2  =  (tOriginal t1) == (tOriginal t2)
 
+
+-- Intersectable
+instance (Intersectable t a) => (Intersectable t) (Transformed a) where
+    intersect ray (Transformed trans invTrans thing) = globalInts
+     where
+        localInts = intersect (transformRay invTrans ray) thing
+        globalInts = map (transformInt (rayOrigin ray) (trans, invTrans)) localInts
 
 transformRay :: M4 -> Ray -> Ray
 transformRay trans (Ray origin dir near far dist) =
@@ -59,21 +66,12 @@ transformInt originalOrigin (trans, invTrans) int =
         newNorm = normalize $ (transpose invTrans) `multVec` (intNorm int)
 
 
-
-
-
-
-instance (Intersectable t a) => (Intersectable t) (Transformed a) where
-    intersect ray (Transformed trans invTrans thing) = globalInts
-     where
-        localInts = intersect (transformRay invTrans ray) thing
-        globalInts = map (transformInt (rayOrigin ray) (trans, invTrans)) localInts
-
-
+-- Boxable
 instance (Boxable a) => Boxable (Transformed a) where
     box to = transformBox (tTrans to) $ box $ tOriginal to
 
 transformBox :: M4 -> Box -> Box
 transformBox trans b = box $ map (trans `multPt`) $ getBoxVertices b
+
 
 -- vim: expandtab smarttab sw=4 ts=4
