@@ -4,6 +4,7 @@ module Transform (
     Transformation(..),
     TransformationGraph,
     flattenTransfoGraph,
+    module Graph,
 ) where
 
 import Geometry
@@ -15,7 +16,8 @@ import Graph
 data Transformation = Identity
                     | Translation Vec3
                     | Rotation Vec3 Flt
-                    | Scale Flt Flt Flt
+                    | Scale Flt
+                    | ScaleXYZ Flt Flt Flt
                     | Transformation `After` Transformation -- Composition
                     deriving Show
 
@@ -24,7 +26,8 @@ transfoM4s :: Transformation -> (M4, M4)
 transfoM4s Identity              = (m4id, m4id)
 transfoM4s (Translation v)       = trans3M4s v
 transfoM4s (Rotation axis angle) = rotM4s axis angle
-transfoM4s (Scale x y z)         = scalexyzM4s x y z
+transfoM4s (Scale factor)        = scaleM4s factor
+transfoM4s (ScaleXYZ x y z)      = scalexyzM4s x y z
 transfoM4s (t1 `After` t2)       = (m1 .*. m2, m2inv .*. m1inv)
     where
         (m1, m1inv) = transfoM4s t1
@@ -45,6 +48,30 @@ instance (Eq a) => Eq (Transformed a) where
     t1 == t2  =  (tOriginal t1) == (tOriginal t2)
 
 
+-- Boxable
+instance (Boxable a) => Boxable (Transformed a) where
+    box t = transformBox (tTrans t) $ box $ tOriginal t
+
+transformBox :: M4 -> Box -> Box
+transformBox trans b = box $ map (trans `multPt`) $ getBoxVertices b
+
+
+-- Geometry
+instance (Geometry a) => Geometry (Transformed a) where
+    boundingBox t = transformBox (tTrans t) $ boundingBox $ tOriginal t
+    intersectGeom (Transformed trans invTrans original) ray =
+        map (transformGeomInt (rayOrigin ray) (trans, invTrans)) originalInts
+        where originalInts = intersectGeom original ray
+
+transformGeomInt :: Pt3 -> (M4, M4) -> GeomIntersection -> GeomIntersection
+transformGeomInt originalOrigin (trans, invTrans) gi =
+    gi {giDir = newDir, giPos = newPos, giNorm = newNorm}
+    where 
+        newDir = trans `multVec` (giDir gi)
+        newPos = originalOrigin .+. (newDir .* giDist gi) 
+        newNorm = normalize $ (transpose invTrans) `multVec` (giNorm gi)
+
+
 -- Intersectable
 instance (Intersectable t a) => (Intersectable t) (Transformed a) where
     intersect ray (Transformed trans invTrans thing) = globalInts
@@ -57,22 +84,8 @@ transformRay trans (Ray origin dir near far dist) =
     Ray (trans `multPt` origin) (trans `multVec` dir) near far dist
 
 transformInt :: Pt3 -> (M4, M4) -> Intersection t -> Intersection t
-transformInt originalOrigin (trans, invTrans) int =
-    -- TODO: this isn't very nice imo...
-    int {intGeomInt = (intGeomInt int) {giDir = newDir, giPos = newPos, giNorm = newNorm}}
-    where 
-        newDir = trans `multVec` (intDir int)
-        --newPos = trans `multPt` (intPos int),
-        newPos = originalOrigin .+. (newDir .* intDist int) 
-        newNorm = normalize $ (transpose invTrans) `multVec` (intNorm int)
-
-
--- Boxable
-instance (Boxable a) => Boxable (Transformed a) where
-    box to = transformBox (tTrans to) $ box $ tOriginal to
-
-transformBox :: M4 -> Box -> Box
-transformBox trans b = box $ map (trans `multPt`) $ getBoxVertices b
+transformInt originalOrigin trans int =
+    int {intGeomInt = transformGeomInt originalOrigin trans $ intGeomInt int}
 
 
 -- Graph
