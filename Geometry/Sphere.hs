@@ -1,5 +1,5 @@
 module Geometry.Sphere (
-    Sphere(..),
+    mkSphere,
     module Geometry
 ) where
 
@@ -10,10 +10,13 @@ import Boxes
 -- | Sphere with radius 1 at origin
 data Sphere = Sphere deriving Show
 
+mkSphere :: AnyGeom
+mkSphere = MkAnyGeom Sphere
+
 instance Geometry Sphere where
     boundingBox Sphere = Box (F3 (-1) (-1) (-1)) (F3 1 1 1)
-    intersectGeom Sphere ray@(Ray e d min max _) =
-        [makeGeomInt ray t (sphereNormal t) Nothing | t <- ts, min < t, t < max]
+    intersectGeom Sphere ray@(Ray e d mint maxt _) =
+        [makeGeomInt ray t (sphereNormal t) Nothing | t <- ts, mint < t, t < maxt]
         where
             ts = solveQuadEq
                     (d .*. d)
