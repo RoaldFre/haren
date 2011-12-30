@@ -1,6 +1,7 @@
 module Geometry.Triangles (
     Vertex(..),
     Triangle(..),
+    mkTriangle,
 
     TriangleMesh(..),
     optimizeTriangleMesh,
@@ -21,6 +22,13 @@ data Vertex = Vertex {
 
 data Triangle = Triangle !Vertex !Vertex !Vertex  -- ^ Triangle with the given vertices
         deriving Show
+
+-- | Make a triangle with the given set of vertexpoints. The normals will 
+-- automatically be computed (giving flat shading) based on the order in 
+-- which the vertexpoints are given (righthanded).
+mkTriangle :: Pt3 -> Pt3 -> Pt3 -> Triangle
+mkTriangle p1 p2 p3 = Triangle (Vertex p1 n) (Vertex p2 n) (Vertex p3 n)
+    where n = normalize $ (p2 .-. p1) .^. (p3 .-. p1)
 
 instance Geometry Triangle where
     boundingBox (Triangle v1 v2 v3) = box $ map vPos [v1, v2, v3]
@@ -68,15 +76,16 @@ instance Geometry Triangle where
 ---}
 
 data TriangleMesh = TriangleMesh [Triangle] deriving Show
---instance Geometry TriangleMesh where ......
---only use accelerated structure for boundingBox and intersect, still make 
---it a geometry later on for rasterizing, though. <- TODO
-
+instance Geometry TriangleMesh where
+    boundingBox (TriangleMesh triangles) =
+        box [boundingBox triangle | triangle <- triangles]
+    intersectGeom (TriangleMesh triangles) ray =
+        concatMap (\t -> intersectGeom t ray) triangles
 
 
 -- | Optimize the given trianglemesh for raytracing. Triangles will be 
 -- placed in a BVH, with each leaf containing at most the given number of 
--- triangles.
+-- triangles (modulo pathological cases).
 optimizeTriangleMesh:: Int -> TriangleMesh -> AnyGeom
 optimizeTriangleMesh n (TriangleMesh triangles) =
     MkAnyGeom $! buildBVH n $ MkAnyGeom `fmap` triangles
