@@ -44,7 +44,7 @@ sierpinski2D = mkIFS $
 
 -- | Create a Sierpinski Piramid by iterating the given starting geometry 
 -- for the given number of iterations. The attractors fill the
--- (-sqrt(1/2), 0, -sqrt(1/2) to (sqrt(1/2), 1, sqrt(1/2)) bounding box.
+-- (-sqrt(1/2), 0, -sqrt(1/2)) to (sqrt(1/2), 1, sqrt(1/2)) bounding box.
 sierpinskiPiramid :: AnyGeom -> Int -> AnyGeom
 sierpinskiPiramid = mkIFS $
     [((F3 (-x)  0 (-x)), 2)
@@ -76,7 +76,7 @@ sierpinskiPiramidStd = sierpinskiPiramid $ MkAnyGeom $
 
 -- | Create a Sierpinski Tetraeder by iterating the given starting geometry 
 -- for the given number of iterations. The attractors fill the
--- (-sqrt(1/2), 0, -sqrt(1/2) to (sqrt(1/2), 1, sqrt(1/2)) bounding box.
+-- (-sqrt(3/8), 0, -sqrt(2/3)) to (sqrt(3/8), 1, sqrt(1/6)) bounding box.
 sierpinskiTetraeder :: AnyGeom -> Int -> AnyGeom
 sierpinskiTetraeder = mkIFS $
     [((F3 (-x/2)  0 ( x*1/3)), 2)
