@@ -95,7 +95,9 @@ flattenTransfoGraph graph =
     map mkTrans $ flattenGraph multTuples (m4id, m4id) matricesGraph
     where
         mkTrans ((m,mInv), leaf) = Transformed m mInv leaf
-        multTuples (a, b) (x, y) = (a .*. x, b .*. y)
         matricesGraph = transfoM4s `fmap` graph
+        multTuples (a, b) (x, y) = (a .*. x, y .*. b)
+        -- Note that the matrix for the child gets multiplied to the right 
+        -- for the normal transformation, and to the left for the inverse.
 
 -- vim: expandtab smarttab sw=4 ts=4
