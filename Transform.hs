@@ -61,7 +61,7 @@ instance (Geometry a) => Geometry (Transformed a) where
     boundingBox t = transformBox (tTrans t) $ boundingBox $ tOriginal t
     intersectGeom (Transformed trans invTrans original) ray =
         map (transformGeomInt (rayOrigin ray) (trans, invTrans)) originalInts
-        where originalInts = intersectGeom original ray
+        where originalInts = intersectGeom original $ transformRay invTrans ray
 
 transformGeomInt :: Pt3 -> (M4, M4) -> GeomIntersection -> GeomIntersection
 transformGeomInt originalOrigin (trans, invTrans) gi =
