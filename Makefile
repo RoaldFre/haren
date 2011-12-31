@@ -44,4 +44,4 @@ demos:
 	cd Demo; ${MAKE}
 
 clean:
-	rm -f *.hi *.hc *.o *.prof *.aux
+	rm -f *.hi{,-boot} *.o{,-boot} *.hc *.prof *.aux
