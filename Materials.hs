@@ -17,6 +17,7 @@ import Haray
 import Ray
 import Material
 import Math
+import Object
 
 import Data.Maybe
 import Control.Applicative
@@ -93,39 +94,17 @@ instance Material Texture where
         Just uv -> return $ (ilCol .***. f uv) .* (ilDir .*. (intNorm int))
 instance Material Dielectric where
     colorMaterial int (Dielectric n) _ = do
-        --reflCol <- black `orRecurseOn` colorRay reflectedRay
+        reflCol <- black `orRecurseOn` colorRay reflectedRay
         if intDir int .*. intNorm int < 0
-            then do
-                colorRay (fromJust refractedRay)
-            else
-                case refractedRay of
-                    Just refrRay -> black `orRecurseOn` colorRay refrRay
-                    Nothing      -> return red -- total internal reflection
-
-
-
-        {-
         then do -- Entering the object
-                -- We always have a refracted ray entering the object.
-            {-
-            refrCol <- case intersectFirst (MkAnyI11e $ intObj int) (fromJust refractedRay) of
-                Just int2 -> color int2 -- TODO ATTENUATION! NOT IN COLOR INTERSECTION!!
-                Nothing   -> return black -- TODO possibly due to epsilon errors...
-                -}
+            -- We always have a refracted ray entering the object.
             refrCol <- colorRay (fromJust refractedRay)
-                --Nothing   -> error "refracted ray could not escape!" -- DEBUG, TODO
-                --Nothing   -> colorRay $ fromJust refractedRay
-                        -- We couldn't escape from ourself! (ie we aren't a 
-                        -- closed geometry) Look for other intersections.
             return $ r *. reflCol  .+.  (1 - r) *. refrCol
         else -- Exiting the object
             case refractedRay of
                 Just refrRay -> colorRay refrRay >>= (\refrCol ->
                                 return (r *. reflCol  .+.  (1 - r) *. refrCol))
                 Nothing      -> return reflCol -- total internal reflection
-                --TODO r == 1 in those two cases? (or return r *. reflCol)
-        -}
-
      where
         nfactor = if (intDir int .*. intNorm int < 0)
                     then 1/n -- entering the object
@@ -138,8 +117,7 @@ instance Material Dielectric where
                     else (rayDir $ fromJust refractedRay) .*. intNorm int
         r0 = ((n - 1) / (n + 1))^2 -- reflectance at normal incidence 
                                    -- (invar under n <-> 1/n)
-        --r = r0 + (1 - r0) * (1 - c)^5 -- Schlick's approx. to Fresnel's eq.
-        r = 0.1 :: Flt -- XXX DEBUG TODO
+        r = r0 + (1 - r0) * (1 - c)^5 -- Schlick's approx. to Fresnel's eq.
 
 -- | n is the ratio of the indices of refraction of the material being 
 -- exited (as determined by the direction vector) to the index of 
@@ -149,21 +127,11 @@ mkRefractedRay int n
     | cosSq < 0 = Nothing -- Total internal reflection
     | otherwise = Just refrRay
     where
-        norm  = intNorm int
+        norm  = if intDir int .*. intNorm int < 0 then intNorm int else inv $ intNorm int
         dir   = normalize $ intDir int
         cosSq = 1  -  n^2 * (1 - (dir .*. norm)^2)
-        refrDir = normalize $ n*.(dir .-. norm.*(dir .*. norm)) .-. norm.*(sqrt cosSq) -- TODO Normalized?
+        refrDir = normalize $ n*.(dir .-. norm.*(dir .*. norm)) .-. norm.*(sqrt cosSq)
         refrRay = Ray (intPos int) refrDir epsilon infinity (intTotDist int)
-
-
-
-
-
-
-
-
-
-
 
 
 

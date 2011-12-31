@@ -11,6 +11,7 @@ module Material (
 ) where
 
 import {-# SOURCE #-} Haray
+import {-# SOURCE #-} Object
 import Math
 import Color
 import Intersection
@@ -23,12 +24,12 @@ type IncidentLight = (UVec3, Color)
 -- | Minimum implementation: either colorMaterial or 
 -- colorMaterialSingleLight.
 class Material a where
-    colorMaterial :: Intersection i -> a -> [IncidentLight] -> RayTracer Color
+    colorMaterial :: Intersection Object -> a -> [IncidentLight] -> RayTracer Color
     colorMaterial int mat incidentLights = do
         contributions <- mapM (colorMaterialSingleLight int mat) incidentLights
         return $ foldl' (.+.) black contributions
 
-    colorMaterialSingleLight :: Intersection i -> a -> IncidentLight -> RayTracer Color
+    colorMaterialSingleLight :: Intersection Object -> a -> IncidentLight -> RayTracer Color
     colorMaterialSingleLight int mat incidentLight = 
         colorMaterial int mat [incidentLight]
 

@@ -239,7 +239,8 @@ colorRay ray = do
         --Just int -> return white
 
 attenuate :: Flt -> Color -> Color
-attenuate dist col = col ./. dist^2
+--attenuate dist col = col ./. dist^2
+attenuate dist col = col
 
 -- | Calculate the Color of the given ObjIntersection
 color :: ObjIntersection -> RayTracer Color
@@ -266,39 +267,74 @@ incidentDirectLight1 int light = do
     let shadowRays = filter correctSide allRays
     return $ mapMaybe (propagateShadowRay scene light) shadowRays
     where
-        correctSide ray = (rayDir ray) .*. (intNorm int) > 0
-    
--- | Spawn Rays from the given point to the given light.
-spawnShadowRays :: Light -> Pt3 -> RayTracer [Ray]
+        correctSide (_, ray) = (rayDir ray) .*. (intNorm int) > 0
+
+{-
+ - TODO 
+ - This needs to be tidied up *completely*! (haven't bothered with making 
+ - light a seperate module/class yet, as I'll redesign it anyway -- just 
+ - lacking the time right now...)
+ -
+ - I'll define a material 'emitting' that completely unifies lightsources 
+ - with objects.
+ -
+ - This means that a LIGHT SOURCE CAN HAVE ANY ARBITRARY GEOMETRY (a teapot 
+ - shaped light!).
+ - That will need a function defined for geometries that spaws rays in 
+ - their direction (this can easily be done if they have a bounding sphere 
+ - -> then it's just shooting random rays at a disk, no matter what the 
+ - relative positions are!).
+ -
+ - This will, in return, make it very easy to get INTRICATE GLOBAL 
+ - LIGHTING! CAUSTICS/FULL PROJECTIONS(!) can simply be done by letting the 
+ - object on which we want to project spawn 'shadow' rays to the dielectric 
+ - object (using the framework to spawn lightrays to a geometry/object that 
+ - represents a lightsource, but this time use it to spawn lightrays to a 
+ - geometry/object that represents a lens -- remember that the only 
+ - distinction between a 'lightsource' and any other object will be that 
+ - the lightsource has an 'emitting' material (component)!).
+ -
+ - This will, in turn, automatically allow fancy effects 'out of the box' 
+ - such as a CAMERA OBSCURA, and true rendering of DEPTH OF FIELD through 
+ - actual lenses made out of dielectric material!
+ - Even SPHERICAL ABBERATIONS etc will be correctly rendered through a 
+ - (spherical) lens -- of course!
+ -}
+
+-- | Spawn Rays from the given point to the given light. Returns a tuple of 
+-- the shadow ray and its associated weight.
+spawnShadowRays :: Light -> Pt3 -> RayTracer [(Flt, Ray)]
 spawnShadowRays (Light lType _) point = spawnShadowRaysFromType lType point
 
-spawnShadowRaysFromType :: LightType -> Pt3 -> RayTracer [Ray]
-spawnShadowRaysFromType (PointSource lightPos) point = return [ray]
+spawnShadowRaysFromType :: LightType -> Pt3 -> RayTracer [(Flt, Ray)]
+spawnShadowRaysFromType (PointSource lightPos) point =
+    return [(1 / distance^2, ray)]
     where
         diff = lightPos .-. point
         distance = len diff
         dir = diff ./. distance
         ray = Ray point dir epsilon distance 0
-spawnShadowRaysFromType (SoftBox origin dir1 dir2 n1 n2) point = do
+spawnShadowRaysFromType (SoftBox origin dir1 dir2 normal n1 n2) point = do
     rands <- sampleStratified n1 n2
     let positions = map (\(r1, r2) -> origin .+. dir1.*r1 .+. dir2.*r2) rands
-    concat <$> sequence [spawnShadowRaysFromType (PointSource pos) point | pos <- positions]
-        
+    concat <$> sequence [shadowRaysFrom pos | pos <- positions]
+    where
+        shadowRaysFrom pt = mapMaybe rescaleRay <$> spawnShadowRaysFromType (PointSource pt) point
+        rescaleRay (weight, ray)
+            | cosTheta < 0 = Nothing
+            | otherwise    = Just (weight / (fromIntegral $ n1 * n2) * cosTheta, ray)
+            where
+                cosTheta = -(normal .*. normalize (rayDir ray))
+
 -- | Propagate the given ray from the given light through the scene. Return 
 -- the resulting incident light of the lightray, or Nothing if it is 
 -- blocked.
-propagateShadowRay :: ObjIntersectable -> Light -> Ray -> Maybe IncidentLight
-propagateShadowRay scene light ray =
+propagateShadowRay :: ObjIntersectable -> Light -> (Flt, Ray) -> Maybe IncidentLight
+propagateShadowRay scene light (weight, ray) =
     case (intersect ray scene)::[Intersection Object] of
-        [] -> Just (normalize (rayDir ray), col)
+        [] -> Just (normalize (rayDir ray), weight *. (lightColor light))
         _  -> Nothing
-    where
-        col = scaledLightColor light
 
--- scale to account for multiple lightrays -- TODO: make this nicer
-scaledLightColor :: Light -> Color
-scaledLightColor (Light (SoftBox _ _ _ n1 n2) col) = col .* (1 / fromIntegral (n1 * n2))
-scaledLightColor (Light _ col) = col
 
 --rayTrace :: Pixel -> RayTracer Color
 rayTrace pixel = do
