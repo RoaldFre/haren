@@ -56,10 +56,4 @@ instance Boxable AnyGeom where
     box (MkAnyGeom geom) = boundingBox geom
 
 
-
-
-
-
-
-
 -- vim: expandtab smarttab sw=4 ts=4

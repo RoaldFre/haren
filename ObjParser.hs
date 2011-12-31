@@ -28,7 +28,6 @@ data ObjParserState s = OPState {
 type ObjParser s a = ParsecT BS.ByteString (ObjParserState s) (ST s) a
 
 parseObjFile :: FilePath -> IO TriangleMesh
---parseObjFile = do return $ TriangleMesh []
 parseObjFile filepath = do
     input <- BS.readFile filepath
 
@@ -124,7 +123,7 @@ slashedInts = do
     (int2, int3) <- try slashedInts2 <|> try slashedInts3 <|> try slashedInts2' <|> slashedInts1
     return (int1, int2, int3)
     where
-        -- TODO be smart
+        -- TODO be more smart
         slashedInts2 = do
             int3 <- string "//" >> int
             return (Nothing, Just int3)
@@ -188,8 +187,6 @@ float = {-# SCC "float" #-} do
    i <- many digit
    d <- option "0" (char '.' >> try (many digit))
    return $! sign * read (i ++ "." ++ d)
-
-
 
 
 -- vim: expandtab smarttab sw=4 ts=4

@@ -36,18 +36,15 @@ instance (Show a) => Show (BVH a) where
         showlist _ [] = ""
         showlist t [x] = t ++ show x
         showlist t (x:xs) = t ++ show x ++ ",\n" ++ showlist t xs
-        --tab = "  "
 
 instance (Boxable a) => Boxable (BVH a) where
     box (BVHleaf boxeds) = box boxeds
     box (BVHnode b _ _) = b
 
 
--- for optimizing a single geometry
 instance (Geometry a) => Geometry (BVH a) where
     boundingBox (BVHleaf boxeds) = box boxeds
     boundingBox (BVHnode b _ _) = box b
-
     intersectGeom bvh ray = concatMap (\g -> intersectGeom g ray) $ bvhPotentialHits ray bvh
 
 

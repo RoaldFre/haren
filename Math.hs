@@ -90,11 +90,6 @@ class (Num x, Fractional x) => NumTuple x t | t -> x where
     rnfTuple :: (NFData x) => t -> ()
     rnfTuple t = (tupleToList t `using` evalList rdeepseq) `seq` ()
 
---instance forall t x. (NumTuple x t) => Show t where
---    show = showTuple
--- This breaks stuff (a lot)
--- -> still have to do it manually for each instance >_<
-
 
 -- | Numerical tuple with 4 components
 data F4 = F4 {f4x :: !Flt
@@ -102,14 +97,12 @@ data F4 = F4 {f4x :: !Flt
              ,f4z :: !Flt
              ,f4w :: !Flt}
 
--- TODO make this instance of Unbox? (see bling math.hs)
-
 instance (NumTuple Flt) F4 where
     tupleToList (F4 x y z w) = [x, y, z, w]
     tupleFromList [x, y, z, w] = F4 x y z w
     tupleFromList _ = error "Invalid number of elements in list for this tuple!"
 instance Show F4 where
-    show = showTuple -- TODO: specify this somehow at the level of NumTuple
+    show = showTuple
 instance Eq F4 where
     (==) = equalsWith equalsEpsilon
 instance NFData F4 where rnf = rnfTuple
@@ -140,7 +133,7 @@ instance (NumTuple Flt) F3 where
     tupleFromList [x, y, z] = F3 x y z
     tupleFromList _ = error "Invalid number of elements in list for this tuple!"
 instance Show F3 where
-    show = showTuple -- TODO: specify this somehow at the level of NumTuple
+    show = showTuple
 instance Eq F3 where
     (==) = equalsWith equalsEpsilon
 instance NFData F3 where rnf = rnfTuple
@@ -191,7 +184,7 @@ instance (NumTuple Flt) F2 where
     tupleFromList [x, y] = F2 x y
     tupleFromList _ = error "Invalid number of elements in list for this tuple!"
 instance Show F2 where
-    show = showTuple -- TODO: specify this somehow at the level of NumTuple
+    show = showTuple
 instance Eq F2 where
     (==) = equalsWith equalsEpsilon
 instance NFData F2 where rnf = rnfTuple

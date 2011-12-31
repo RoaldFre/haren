@@ -39,8 +39,8 @@ surfaceArea :: Box -> Flt
 surfaceArea (Box p1 p2) = 2 * (x*y + y*z + z*x)
     where (F3 x y z) = p2 .-. p1
 
--- Note: compiler will/should specialize this to loose all the 
--- normal-dragging-along code from intersectBox. (TODO: verify)
+-- Note: compiler will/should specialize this/inline intersectBox to loose 
+-- all the normal-dragging-along code from intersectBox. (TODO: verify)
 hitsBox :: Ray -> Box -> Bool
 ray `hitsBox` box = not $ null $ intersectBox box ray
 

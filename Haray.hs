@@ -67,7 +67,6 @@ mkInitialState scene conf =
         internalScene = optimizeSceneGraph $ sGraph scene
         lights = sLights scene
 
--- TODO declared as newtype here, as data in bootfile ... ok?
 newtype RayTracer a = RT (State RayTraceState a)
     deriving (Monad, Functor)
 
@@ -108,27 +107,9 @@ splitGenerators g = g1 : splitGenerators g2
     where (g1, g2) = split g
 
 
-
-
-
-
-
-
-
-
-
-
-{-
-sceneGraphToInternalStructure :: SceneGraph -> SceneStructure
-sceneGraphToInternalStructure = (buildBVH 1) . flattenSceneGraph
--}
-
 -- | Optimize the given scenegraph for raytracing.
 optimizeSceneGraph :: SceneGraph -> ObjIntersectable
 optimizeSceneGraph = MkAnyI11e . (buildBVH 1) . flattenSceneGraph
-
-
-
 
 
 -- | Return the default value if getDepth is not zero, or use the given 
@@ -208,7 +189,7 @@ steppedSequence num step = steppedSequence' (num-1) [0]
 
 cameraRays :: Pixel -> RayTracer [Ray]
 cameraRays pixel = do
-    res <- getRes -- TODO: getResolution from Renderer?
+    res <- getRes
     cam <- getCam
     num <- getAAsamples
     let pixPt = pixToPt pixel
@@ -257,17 +238,14 @@ colorRay ray = do
         --Nothing -> return red
         --Just int -> return white
 
+attenuate :: Flt -> Color -> Color
+attenuate dist col = col ./. dist^2
+
 -- | Calculate the Color of the given ObjIntersection
 color :: ObjIntersection -> RayTracer Color
 color int = do
     incidentLight <- incidentDirectLight int -- TODO is this sufficiently lazy (at all??)
     colorMaterial int (intMat int) incidentLight
-
-
---TODO clean this up, check if correct here, merge with the attenuation for 
---propagating shadow rays -- lose the hack rescale factor
-attenuate :: Flt -> Color -> Color
-attenuate dist col = col ./. (dist * dist)
 
 
 -- | Returns the incident light from the scene that's hitting the given 
@@ -311,7 +289,7 @@ spawnShadowRaysFromType (SoftBox origin dir1 dir2 n1 n2) point = do
 -- blocked.
 propagateShadowRay :: ObjIntersectable -> Light -> Ray -> Maybe IncidentLight
 propagateShadowRay scene light ray =
-    case (intersect ray scene)::[Intersection Object] of -- TODO better way?
+    case (intersect ray scene)::[Intersection Object] of
         [] -> Just (normalize (rayDir ray), col)
         _  -> Nothing
     where
@@ -327,7 +305,6 @@ rayTrace pixel = do
     resetDepth
     num <- getAAsamples
     cameraRays pixel >>= colorRays (num*num)
-
 
 
 -- vim: expandtab smarttab sw=4 ts=4

@@ -60,7 +60,7 @@ pollForQuit :: IO ()
 pollForQuit = do
     e <- pollEvent
     case e of
-        Quit    -> exitSuccess --TODO: nicer way?
+        Quit    -> exitSuccess
         NoEvent -> return ()
         _       -> pollForQuit
 

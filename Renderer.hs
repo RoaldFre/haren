@@ -24,18 +24,6 @@ class (Monad m, Functor m) => Renderer c m | m -> c, c -> m where
     getResolution :: m Resolution
     run :: Scene -> c -> m a -> a -- ^ scene -> config -> computation -> result
 
-{-
-class (Monad m, Functor m) => RendererST c m s | m -> c, c -> m where
-    colorPixel_ :: Pixel -> m Color 
-    getResolution_ :: m Resolution
-    run_ :: Scene -> c -> m a -> a -- ^ scene -> config -> computation -> result
--}
-
-
--- TODO: Pick proper convention (0 to res-1) or (1 to res) and check if 
--- everything complies with this!
--- | ( 0,  0) is the top left corner of the image
--- | (nx, ny) is the bottom right corner of the image
 newtype Pixel = Pixel (Int, Int) deriving (Show, Ord, Eq, Ix)
 
 pixToPt :: Pixel -> Pt2

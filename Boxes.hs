@@ -44,7 +44,7 @@ instance (Boxable a) => Boxable [a] where
 
 -- | Store a precomputed bounding box -> O(1) retrieval time
 data Boxed a = Boxed {
-        thebox :: !Box, -- TODO *not* strict?
+        thebox :: !Box,
         unbox  :: a
     } deriving Functor
 instance (Show a) => Show (Boxed a) where
@@ -52,15 +52,13 @@ instance (Show a) => Show (Boxed a) where
 instance Boxable (Boxed a) where
     box = thebox
 
--- | Put the argument in a box. -- TODO  *unless* it already is boxed.!!!!!
+-- | Put the argument in a box.
 mkBoxed :: (Boxable a) => a -> Boxed a
 mkBoxed x = Boxed (box x) x
 
 
-
 hitsBoxed :: Ray -> Boxed a -> Bool
 ray `hitsBoxed` boxed = ray `hitsBox` (box boxed)
---ray `hitsBoxed` boxed = True -- DEBUG
 
 
 -- vim: expandtab smarttab sw=4 ts=4

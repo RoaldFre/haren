@@ -18,7 +18,7 @@ instance (NumTuple Flt) Color where
     tupleFromList [r, g, b] = Color r g b
     tupleFromList _ = error "Invalid number of elements in list for this color!"
 instance Show Color where
-    show = showTuple -- TODO: specify this somehow at the level of NumTuple
+    show = showTuple
 instance Mult Color Color Flt where
     (.*.) = dot
 instance Mult Color Flt Color where (.*.) = (.*)

@@ -37,11 +37,6 @@ class Intersectable t a where
     intersect :: Ray -> a -> [Intersection t]
 
 
-
-
-
--- TODO IS THIS CORRECT?:
-
 -- Existential intersectable (i11e cfr i18n: intersectable is too long to 
 -- type and screws over my already too-wide formatting :P)
 data AnyIntersectable t = forall a . (Intersectable t a, Show a) => MkAnyI11e a
@@ -50,7 +45,5 @@ instance (Intersectable t) (AnyIntersectable t) where
     intersect ray (MkAnyI11e intersectable) = intersect ray intersectable
 instance Show (AnyIntersectable t) where
     show (MkAnyI11e intersectable) = "AnyI11e " ++ show intersectable
-
-
 
 -- vim: expandtab smarttab sw=4 ts=4
