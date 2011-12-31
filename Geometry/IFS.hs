@@ -4,6 +4,7 @@ module Geometry.IFS (
     sierpinski2D,
     sierpinskiPiramid, sierpinskiPiramidStd,
     sierpinskiTetraeder, sierpinskiTetraederStd,
+    menger, mengerStd,
 
     module Geometry
 ) where
@@ -11,6 +12,7 @@ module Geometry.IFS (
 import Math
 import Geometry
 import Geometry.Triangles
+import Geometry.Box
 import Transform
 import BVH
 
@@ -99,5 +101,23 @@ sierpinskiTetraederStd = sierpinskiTetraeder $ MkAnyGeom $
         r = F3 ( x/2)  0 ( x*1/3) -- right
         b = F3    0    0 (-x*2/3) -- back
         t = F3    0    1     0    -- top
+
+
+
+-- | Create a Menger Sponge by iterating the given starting geometry for 
+-- the given number of iterations. The attractors fill the
+-- (-0.5, 0, -0.5) to (0.5, 1, 0.5) bounding box.
+menger :: AnyGeom -> Int -> AnyGeom
+menger = mkIFS $
+    [(0.5 *. (F3 (i - 1) j (k - 1)), 3) |
+        i <- [0,1,2], j <- [0,1,2], k <- [0,1,2],
+        i /= 1  ||  j /= 1,
+        j /= 1  ||  k /= 1,
+        k /= 1  ||  i /= 1]
+
+-- | Create a Menger Sponge with as initial geometry a bounding box of the 
+-- attractors.
+mengerStd :: Int -> AnyGeom
+mengerStd = menger $ mkBox (F3 (-0.5) 0 (-0.5)) (F3 0.5 1 0.5)
 
 -- vim: expandtab smarttab sw=4 ts=4
