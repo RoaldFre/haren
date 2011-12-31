@@ -1,7 +1,7 @@
 all: main
 
-#TODO: test -flto performance
-#OPTS_C=-optc-O3 -opta-march=native -optc-march=native -optl-march-native -optc-ffast-math -optc-mfpmath=sse -optc-msse4
+export
+
 BACKEND_C=-optc-O4 -optc-flto -optl-O4 -optl-flto -opta-march=native -optc-march=native -optl-march-native -optc-ffast-math -optc-mfpmath=sse -optc-msse4
 BACKEND_C_NO_LTO=-optc-O3 -optl-O3 -opta-march=native -optc-march=native -optl-march-native -optc-ffast-math -optc-mfpmath=sse -optc-msse4
 
@@ -20,27 +20,19 @@ OPTS=${COMMON_OPTS} -funfolding-use-threshold=1000 -funfolding-creation-threshol
 
 OPTS_QUICK=${COMMON_OPTS} -O2 -funfolding-use-threshold=200 -funfolding-creation-threshold=200
 
-
 main:
 	ghc ${OPTS} ${BACKEND} --make Main
 force:
-	ghc ${OPTS_QUICK} ${BACKEND} --make -fforce-recomp Main
-perf:
-	ghc ${OPTS} ${BACKEND} --make Main
-forceperf:
 	ghc ${OPTS} ${BACKEND} --make -fforce-recomp Main
 
 gcc:
-	make forceperf BACKEND=${BACKEND_C}
+	make force BACKEND=${BACKEND_C}
 agg:
-	make forceperf BACKEND=${BACKEND_LLVM_AGRESSIVE}
+	make force BACKEND=${BACKEND_LLVM_AGRESSIVE}
 basic:
-	make forceperf BACKEND=${BACKEND_LLVM_BASIC}
+	make force BACKEND=${BACKEND_LLVM_BASIC}
 
-forceprof:
-	ghc ${OPTS} ${BACKEND_C_NO_LTO} --make -fforce-recomp -prof -auto-all -caf-all Main
 prof:
-	#ghc ${OPTS} --make -prof -auto-all -caf-all Bench
 	ghc ${OPTS} $(BACKEND_C_NO_LTO) --make -prof -auto-all -caf-all Bench
 	./Bench +RTS -H300m -p -hc -sstderr 2> Bench.stderr
 	less Bench.stderr
@@ -48,14 +40,8 @@ prof:
 	hp2ps -e8in -c Bench.hp
 	evince Bench.ps
 
-demo:
-	ghc ${OPTS_QUICK} ${BACKEND} --make DielectricDemo
-
-harastest:
-	ghc ${OPTS_QUICK} ${BACKEND_C} --make HarasTest.hs
-	./HarasTest
-
-.PHONY: harastest
+demos:
+	cd Demo; ${MAKE}
 
 clean:
-	rm -f *hi *hc *o *prof *aux
+	rm -f *.hi *.hc *.o *.prof *.aux
