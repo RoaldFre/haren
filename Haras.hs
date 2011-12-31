@@ -4,8 +4,11 @@
 module Haras where
 
 import Math hiding (transpose)
-import Types
 import Renderer
+import Camera
+import Light
+import Color
+import Geometry.Triangles
 
 import Data.Array.ST
 import Data.Array.MArray
@@ -73,13 +76,13 @@ runRasterizer scene conf (RZ computation) = runST $ do
 
 type Image = UArray (Pixel, ColorChannel) Flt
 
-rasterizeToImage :: TriangleMesh -> Material -> [Light] -> RasterizerConfig -> Image
-rasterizeToImage (TriangleMesh mesh) mat lights conf = runSTUArray $ do
+rasterizeToImage :: TriangleMesh -> Color -> [Light] -> RasterizerConfig -> Image
+rasterizeToImage (TriangleMesh mesh) col lights conf = runSTUArray $ do
     -- TODO change literals 'Red' & 'Blue' by some way to find max index.....
     raster <- newArray ((Pixel (0, 0), Red), (Pixel (nx-1, ny-1), Blue)) 0
     zbuffer <- newArray (Pixel (0,0), Pixel (nx-1, ny-1)) (-2)
     let initialState = RasterizerState res ambient lights cam matr raster zbuffer
-    evalStateT (fromRZ $ rasterize mat mesh) initialState
+    evalStateT (fromRZ $ rasterize col mesh) initialState
     return raster
     where
         res@(Resolution (nx, ny)) = confRes conf
@@ -89,8 +92,8 @@ rasterizeToImage (TriangleMesh mesh) mat lights conf = runSTUArray $ do
         fromRZ (RZ computation) = computation
 
 -- Rasterize all the triangles to the raster
-rasterize :: Material -> [Triangle] -> Rasterizer s ()
-rasterize mat triangles = forM_ triangles $ rasterizeTriangle mat
+rasterize :: Color -> [Triangle] -> Rasterizer s ()
+rasterize col triangles = forM_ triangles $ rasterizeTriangle col
 
 -- | (direction pointing *to* the lightsource, color of incident light)
 -- The direction is normalised to unity.
@@ -157,15 +160,15 @@ viewM cam = rotate .*. translate
         (u, v, w) = camUVW cam
 
 
-rasterizeTriangle :: Material -> Triangle -> Rasterizer s ()
-rasterizeTriangle mat triangle@(Triangle v1 v2 v3) = do
+rasterizeTriangle :: Color -> Triangle -> Rasterizer s ()
+rasterizeTriangle col triangle@(Triangle v1 v2 v3) = do
     [rv1, rv2, rv3] <- mapM vertexShader [v1, v2, v3]
     amb <- getAmbient
     res <- getRes
     let rastertriangle = RasterTriangle rv1 rv2 rv3
     let pixAndBaryCoords = toPixelsAndCoords res rastertriangle
     forM_ pixAndBaryCoords (\(p, c) -> do
-        writeColor p $ pixelShader amb rastertriangle mat c)
+        writeColor p $ pixelShader amb rastertriangle col c)
 
 
 toPixelsAndCoords :: Resolution -> RasterTriangle -> [(Pixel, (Flt, Flt, Flt))]
@@ -255,12 +258,14 @@ incidentLights point = do
         getPosCol _ = error "Rasterizer only supports point light sources!"
 
 
--- | Calculate the color and depth for a pixel with the given barycentric 
--- coordinates within the given triangle composed of the given material, 
--- under the given ambient color.
-pixelShader :: Color -> RasterTriangle -> Material -> (Flt, Flt, Flt) -> (Color, Flt)
-pixelShader ambient (RasterTriangle v1 v2 v3) mat (a, b, c) =
-    (shading ambient mat norm incidentLight, depth)
+-- | Calculate the color and depth for a pixel in a triangle.
+pixelShader :: Color           -- ^ The ambient color
+            -> RasterTriangle  -- ^ Triangle to shade
+            -> Color           -- ^ The diffuse color of the triangle
+            -> (Flt, Flt, Flt) -- ^ The barycentric coordinates of the pixel to shade
+            -> (Color, Flt)    -- ^ The color and depth of the shaded pixel
+pixelShader ambient (RasterTriangle v1 v2 v3) col (a, b, c) =
+    (shading ambient col norm incidentLight, depth)
     where
         norm = normalize $ interpolate (rvNorm v1) (rvNorm v2) (rvNorm v3)
         depth = a*(rvDepth v1) + b*(rvDepth v2) + c*(rvDepth v3)
@@ -269,33 +274,14 @@ pixelShader ambient (RasterTriangle v1 v2 v3) mat (a, b, c) =
                     (rvIL v1) (rvIL v2) (rvIL v3)
         interpolate t1 t2 t3 = t1 .* a  .+.  t2 .* b  .+.  t3 .* c
 
-shading :: Color -> Material -> UVec3 -> [IncidentLight] -> Color
-shading ambient material normal incidentLight = 
-    foldl' addWeightedPureColor ambient material
-    where 
-        addWeightedPureColor col (MaterialComponent (weight, pureMat)) =
-            col  .+.  weight *. (colorPure normal incidentLight pureMat)
-
--- | Calculate the Color of a PureMaterial under the given light for the 
--- given normal.
-colorPure :: UVec3 -> [IncidentLight] -> PureMaterial -> Color
-colorPure norm incidentLights pureMat@(PureMaterial matType matCol) = 
-    matCol .***. total 
+shading :: Color -> Color -> UVec3 -> [IncidentLight] -> Color
+shading ambient col normal incidentLights =
+    ambient .+. col .***. (foldl' (.+.) black contributions)
     where
-        total = foldl' (.+.) black contributions
-        contributions = map (colorMaterialType norm matType) incidentLights
-        --TODO: check normal for correct side
-
-colorMaterialType :: UVec3 -> MaterialType -> IncidentLight -> Color
-colorMaterialType norm Diffuse (ilDir, ilCol)
-    | projection < 0 = black
-    | otherwise      = ilCol .* projection
-    where projection = ilDir .*. norm
-colorMaterialType _ _ _ = error "Rasterizer only supports diffuse materials!"
-
-
-
-
-
+        contributions = mapMaybe shading' incidentLights
+        shading' (ilDir, ilCol)
+            | projection < 0 = Nothing
+            | otherwise      = Just $ ilCol .* projection
+            where projection = ilDir .*. normal
 
 -- vim: expandtab smarttab sw=4 ts=4

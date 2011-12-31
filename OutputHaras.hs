@@ -1,11 +1,12 @@
-module OutputHaras (renderImage) where
+module OutputHaras (
+    renderImage,
+    module Renderer,
+) where
 
+import Renderer
 import Haras
-import Math
 
-import Control.Applicative
 import Data.Array.IArray
-import Data.Array.Unboxed
 
 
 renderImage :: FilePath -> Image -> IO ()
