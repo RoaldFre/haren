@@ -2,6 +2,8 @@ module Geometry.Box (
     Box(..),
     mkBox,
     getBoxVertices,
+    centroid,
+    surfaceArea,
     hitsBox,
 ) where
 
@@ -14,7 +16,9 @@ import Data.List
 data Box = Box {
         boxMin :: !Pt3,
         boxMax :: !Pt3
-    } deriving Show
+    }
+instance Show Box where
+    show (Box p1 p2) = "<" ++ show p1 ++ "#" ++ show p2 ++ ">"
 
 instance Geometry Box where
     boundingBox = id
@@ -27,6 +31,13 @@ getBoxVertices :: Box -> [Pt3]
 getBoxVertices (Box p1 p2) = [p1 .+. (F3 x y z) | x <- [0, f3x (p2 .-. p1)], 
                                                   y <- [0, f3y (p2 .-. p1)],
                                                   z <- [0, f3z (p2 .-. p1)]]
+
+centroid :: Box -> Pt3
+centroid (Box p1 p2) = (p1 .+. p2) .* 0.5
+
+surfaceArea :: Box -> Flt
+surfaceArea (Box p1 p2) = 2 * (x*y + y*z + z*x)
+    where (F3 x y z) = p2 .-. p1
 
 -- Note: compiler will/should specialize this to loose all the 
 -- normal-dragging-along code from intersectBox. (TODO: verify)

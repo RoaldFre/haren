@@ -5,7 +5,6 @@ module Geometry.Triangles (
 
     TriangleMesh(..),
     optimizeTriangleMesh,
-    optimizeTriangleMeshFast,
 
     module Geometry
 ) where
@@ -89,16 +88,5 @@ instance Geometry TriangleMesh where
 optimizeTriangleMesh:: Int -> TriangleMesh -> AnyGeom
 optimizeTriangleMesh n (TriangleMesh triangles) =
     MkAnyGeom $! buildBVH n $ MkAnyGeom `fmap` triangles
-
-optimizeTriangleMeshFast:: Int -> TriangleMesh -> AnyGeom
-optimizeTriangleMeshFast n (TriangleMesh triangles) =
-    MkAnyGeom $! buildBVHfast n $ MkAnyGeom `fmap` triangles
-
-
-
-
-
-
-
 
 -- vim: expandtab smarttab sw=4 ts=4

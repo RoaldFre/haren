@@ -1,9 +1,7 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, DeriveFunctor #-}
 -- | Module for making Bounding Volume Hierarchies (Containing at least one element.)
 module BVH (
-    --BVH(..), -- TODO hide this?
     buildBVH,
-    buildBVHfast,
 
     -- from module Boxes
     Boxable(..)
@@ -16,13 +14,13 @@ import Intersection
 import Math
 
 import Data.List hiding (transpose, intersect)
-import Control.Applicative
+import Data.Maybe
 import GHC.Exts
 
--- | Bounding Volume Hierarchy. (Contains at least one element.)
+-- | Bounding Volume Hierarchy.
 data BVH a = 
         BVHleaf [Boxed a]
-      | BVHnode (Boxed (BVH a)) (Boxed (BVH a))
+      | BVHnode Box (BVH a) (BVH a)
 instance (Show a) => Show (BVH a) where
     show bvh = show' "" bvh
      where
@@ -30,10 +28,10 @@ instance (Show a) => Show (BVH a) where
         show' t (BVHleaf xs) = t ++ "BVHleaf [\n"
                             ++ showlist (t ++ "        ") xs ++ "\n" 
                             ++ t ++ "       ]"
-        show' t (BVHnode l r) = t ++ "BVHnode (\n" 
-                            ++ show' newt (unbox l)
+        show' t (BVHnode b l r) = t ++ "BVHnode <" ++ show b ++ "> (\n"
+                            ++ show' newt l
                             ++ "\n)(\n"
-                            ++ show' newt (unbox r) 
+                            ++ show' newt r 
                         where newt = t ++ "        "
         showlist _ [] = ""
         showlist t [x] = t ++ show x
@@ -41,14 +39,14 @@ instance (Show a) => Show (BVH a) where
         --tab = "  "
 
 instance (Boxable a) => Boxable (BVH a) where
-    box (BVHleaf b) = box b
-    box (BVHnode b1 b2) = box (b1, b2)
+    box (BVHleaf boxeds) = box boxeds
+    box (BVHnode b _ _) = b
 
 
 -- for optimizing a single geometry
 instance (Geometry a) => Geometry (BVH a) where
-    boundingBox (BVHleaf b) = box b
-    boundingBox (BVHnode b1 b2) = box (b1, b2)
+    boundingBox (BVHleaf boxeds) = box boxeds
+    boundingBox (BVHnode b _ _) = box b
 
     intersectGeom bvh ray = concatMap (\g -> intersectGeom g ray) $ bvhPotentialHits ray bvh
 
@@ -59,12 +57,11 @@ instance (Intersectable t a) => Intersectable t (BVH a) where
 
 -- | Returns a list of all elements whose bounding box got hit by the given 
 -- ray.
--- TODO: I'm not testing if I won't hit with the *entire* bvh alltogether 
--- (== potentially slight performance drop for small, 'dense' trees)
 bvhPotentialHits :: Ray -> BVH a -> [a]
-bvhPotentialHits ray (BVHleaf b) = map unbox $ filter (ray `hitsBoxed`) b
-bvhPotentialHits ray (BVHnode b1 b2) =
-    concatMap (bvhPotentialHits ray . unbox) $ filter (ray `hitsBoxed`) [b1, b2]
+bvhPotentialHits ray (BVHleaf boxeds) = map unbox $ filter (ray `hitsBoxed`) boxeds
+bvhPotentialHits ray (BVHnode b bvh1 bvh2)
+    | ray `hitsBox` b = concatMap (bvhPotentialHits ray) [bvh1, bvh2]
+    | otherwise       = []
 
 
 
@@ -75,103 +72,80 @@ bvhPotentialHits ray (BVHnode b1 b2) =
 -- list further (eg when it holds more than 'n' items with the exact same 
 -- box), then that list will be put in a leaf in its entirety.
 buildBVH :: (Boxable a) => Int -> [a] -> BVH a
-buildBVH n xs = buildBVH' $ WL (length xs) (map mkBoxed xs)
+buildBVH n xs = buildBVH' $ map mkBoxed xs
     where
-        buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
-        buildBVH' withLength@(WL l xs2)
-           | l <= n    = BVHleaf xs2
-           | otherwise = case bestPartition $ partitionBoxeds withLength of
-                Nothing       -> BVHleaf xs2
-                Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
-                                         (buildBVH' <$> swapBoxedAndWithLength p2)
-        swapBoxedAndWithLength (WL n2 b) = Boxed (thebox b) (WL n2 (unbox b))
-
---TODO speed up the normal one
-buildBVHfast :: (Boxable a) => Int -> [a] -> BVH a
-buildBVHfast n xs = buildBVH' $ WL (length xs) (map mkBoxed xs)
-    where
-        buildBVH' :: (Boxable a) => WithLength [Boxed a] -> BVH a
-        buildBVH' withLength@(WL l xs2)
-           | l <= n    = BVHleaf xs2
-           | otherwise = case bestPartition $ partitionBoxedsFast withLength of
-                Nothing       -> BVHleaf xs2
-                Just (p1, p2) -> BVHnode (buildBVH' <$> swapBoxedAndWithLength p1)
-                                         (buildBVH' <$> swapBoxedAndWithLength p2)
-        swapBoxedAndWithLength (WL n2 b) = Boxed (thebox b) (WL n2 (unbox b))
-
-
+        buildBVH' :: (Boxable a) => [Boxed a] -> BVH a
+        buildBVH' xs2
+           | length xs2 <= n = BVHleaf xs2
+           | otherwise       = case partitionBoxeds xs2 of
+                Nothing          -> BVHleaf xs2
+                Just (_, p1, p2) -> BVHnode (box (fromWL p1, fromWL p2))
+                                            (buildBVH' $ unbox $ fromWL p1)
+                                            (buildBVH' $ unbox $ fromWL p2)
 
 -- | A thingamajing with an associated length of said thingamajing stored 
 -- for O(1) access.
-data WithLength a = WL Int a deriving Functor
-toWL :: [a] -> WithLength [a]
-toWL xs = WL (length xs) xs
+data WithLength a = WL {
+        wlLength :: Int,
+        fromWL   :: a
+    } deriving (Functor, Show)
 
 -- | A partition of a bunch of boxeds, each part wrapped in a boxed itself. 
 -- For each 'bunch of boxeds', the number of elements inside is stored as 
--- well.
-type BoxedPartition a = (WithLength (Boxed [Boxed a]), WithLength (Boxed [Boxed a]))
+-- well, The first element of the tuple is the cost of the partition.
+type BoxedPartition a = (Flt, WithLength (Boxed [Boxed a]), WithLength (Boxed [Boxed a]))
 
--- | Generate a list of possible Partitions from a list of boxeds. 
-partitionBoxeds :: (Boxable a) => WithLength [Boxed a] -> [BoxedPartition a]
-partitionBoxeds boxedsWL = map (mapPair (fmap mkBoxed)) $
-    partitionList sortedx ++ partitionList sortedy ++ partitionList sortedz
+
+-- | Return the best partition of the list of boxeds.
+partitionBoxeds :: (Boxable a) => [Boxed a] -> Maybe (BoxedPartition a)
+partitionBoxeds boxeds = bestPartition $ catMaybes $ [partx, party, partz]
     where
-        sortedx = sortWith (\b -> f3x (minb b)) <$> boxedsWL
-        sortedy = sortWith (\b -> f3y (minb b)) <$> boxedsWL
-        sortedz = sortWith (\b -> f3z (minb b)) <$> boxedsWL
-        minb = boxMin . box
+        sortedx = sortWith (\b -> f3x (centroid $ box b)) boxeds
+        sortedy = sortWith (\b -> f3y (centroid $ box b)) boxeds
+        sortedz = sortWith (\b -> f3z (centroid $ box b)) boxeds
+        partx = bestPartition $ makePartitions sortedx
+        party = bestPartition $ makePartitions sortedy
+        partz = bestPartition $ makePartitions sortedz
 
-
--- Only partitions dividing the three axes in the center are generated (so 
--- this will run in O(n) instead of O(n log n) when sorting).  Partitions 
--- where one of the parts is empty are suppressed.
-partitionBoxedsFast :: (Boxable a) => WithLength [Boxed a] -> [BoxedPartition a]
-partitionBoxedsFast (WL 0 [])  = []
-partitionBoxedsFast (WL 1 [_]) = []
-partitionBoxedsFast (WL _ xs)  = map (mapPair (fmap mkBoxed . toWL)) $
-                     filter (\(a, b) -> not (null a)  &&  not (null b))
-                        [partition (\b -> f3x (minb b) < thresholdx) xs
-                        ,partition (\b -> f3y (minb b) < thresholdy) xs
-                        ,partition (\b -> f3z (minb b) < thresholdz) xs]
+-- | Creates all partitions that can be made by splitting the given list 
+-- at some position. (So not *all* permutations are considered! Thus, this 
+-- only really makes sense if the list is somehow 'cleverly ordererd')
+makePartitions :: Boxable a => [Boxed a] -> [BoxedPartition a]
+makePartitions xs = zipWith costOfPartition bs1 bs2
     where
-        minb = boxMin . box
-        (Box totalmin totalmax) = box xs
-        (F3 thresholdx thresholdy thresholdz) = totalmin .+. (totalmax .* 0.5)
+        -- A bit or reversed-list-magic to line up the 'matching' 
+        -- partitions/sublists. Need tail to get good 'match' and
+        -- and avoid duplicates.
+        bs1 = tail $ accumulateBoxeds xs
+        bs2 = reverse $ tail $ accumulateBoxeds $ reverse xs 
+        costOfPartition p1@(WL n1 b1) p2@(WL n2 b2) = (cost, p1, p2)
+            where cost = (surfaceArea $ box b1) * (fromIntegral n1)
+                       + (surfaceArea $ box b2) * (fromIntegral n2)
 
+bestPartition :: Boxable a => [BoxedPartition a] -> Maybe (BoxedPartition a)
+bestPartition xs
+    | null xs   = Nothing
+    | otherwise = Just $ foldl1 bestPart xs
+    where bestPart p1@(c1,_,_) p2@(c2,_,_) = if c1 < c2 then p1 else p2
 
-
-mapPair :: (a -> b) -> (a, a) -> (b, b)
-mapPair f (x, y) = (f x, f y)
-
--- | No trivial partitions "((0,[]), (n,xs))" are created.
-partitionList :: WithLength [a] -> [(WithLength [a], WithLength [a])]
-partitionList (WL 0 []) = []
-partitionList (WL n (x:xs)) = partitionList' (WL 1 [x]) (WL (n - 1) xs)
+-- | The result when acting on a list
+-- [Boxed a, Boxed b, Boxed c]
+-- will be the list (where the WithLength is suppressed)
+-- [Boxed (bounding box of a b c) [a,b,c]
+-- ,Boxed (bounding box of   b c)   [b,c]
+-- ,Boxed (bounding box of     c)     [c]]
+accumulateBoxeds :: [Boxed a] -> [WithLength (Boxed [Boxed a])]
+accumulateBoxeds [] = []
+accumulateBoxeds (boxed:boxeds) = accum [WL 1 (mkBoxed [boxed])] boxeds
     where
-        partitionList' (WL  _  _) (WL 0  [])   = []
-        partitionList' (WL n1 as) (WL n2 (b:bs)) = (WL n1 as, WL n2 (b:bs)) :
-                            partitionList' (WL (n1 + 1) (b:as)) (WL (n2 - 1) bs)
-        partitionList' _ _ = error "Inconsistent withLengths!"
-partitionList _ = error "Inconsistent withLength!"
-
-
-costOfPartition :: BoxedPartition a -> Flt
-costOfPartition ((WL n1 b1), (WL n2 b2)) = 
-    (halfSurfaceArea $ box b1) * (fromIntegral n1)
-    + (halfSurfaceArea $ box b2) * (fromIntegral n2)
-    where 
-        halfSurfaceArea (Box p1 p2) = x*y + y*z + z*x
-            where (F3 x y z) = p2 .-. p1
-
-bestPartition :: [BoxedPartition a] -> Maybe (BoxedPartition a)
-bestPartition [] = Nothing
-bestPartition [p] = Just p
-bestPartition (p1:p2:ps) = if costOfPartition p1 < costOfPartition p2
-    then bestPartition (p1:ps)
-    else bestPartition (p2:ps)
-
-
+        accum :: [WithLength (Boxed [Boxed a])] -> [Boxed a] -> [WithLength (Boxed [Boxed a])]
+        accum acc []     = acc
+        accum acc (b:bs) = accum newacc bs
+            where 
+                newacc = (WL (1 + l) (Boxed (box (a,b)) (b:as))) : acc
+                l = wlLength $ head acc
+                a = fromWL $ head acc
+                as = unbox $ fromWL $ head acc
 
 
 -- vim: expandtab smarttab sw=4 ts=4

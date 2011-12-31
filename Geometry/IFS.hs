@@ -25,7 +25,7 @@ attrToTrans (point, scale) =
 
 mkIFS :: [Attractor] -> AnyGeom -> Int -> AnyGeom
 mkIFS attractors unit depth =
-    MkAnyGeom $ buildBVHfast 1 $ flattenTransfoGraph $ mkIFS' depth $ Leaf unit
+    MkAnyGeom $ buildBVH 1 $ flattenTransfoGraph $ mkIFS' depth $ Leaf unit
     where
         mkIFS' 0 graph = graph
         mkIFS' d graph = Fork $ map (\a -> Node (attrToTrans a) subGraph) attractors

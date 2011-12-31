@@ -44,12 +44,11 @@ instance (Boxable a) => Boxable [a] where
 
 -- | Store a precomputed bounding box -> O(1) retrieval time
 data Boxed a = Boxed {
-        thebox :: !Box,
+        thebox :: !Box, -- TODO *not* strict?
         unbox  :: a
     } deriving Functor
 instance (Show a) => Show (Boxed a) where
-    show b = "Box <" ++ show p1 ++ "#" ++ show p2 ++ "> containing " ++ show (unbox b)
-        where Box p1 p2 = thebox b
+    show b = "Boxed in " ++ show (thebox b) ++ " containing " ++ show (unbox b)
 instance Boxable (Boxed a) where
     box = thebox
 
