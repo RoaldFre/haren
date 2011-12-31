@@ -1,24 +1,19 @@
 {-# LANGUAGE TypeSynonymInstances, DeriveFunctor #-}
 
-module Boxes where
+module Boxes (
+    Boxable(..),
+    Boxed(..),
+    mkBoxed,
+    hitsBoxed,
+
+    module Geometry.Box
+) where
 
 import Math
 import Ray
+import {-# SOURCE #-} Geometry.Box
 
 import Data.List
-
--- | Axis aligned box.
-data Box = Box {
-        boxMin :: !Pt3,
-        boxMax :: !Pt3
-    } deriving Show
-
-getBoxVertices :: Box -> [Pt3]
-getBoxVertices (Box p1 p2) = [p1 .+. (F3 x y z) | x <- [0, f3x (p2 .-. p1)], 
-                                                  y <- [0, f3y (p2 .-. p1)],
-                                                  z <- [0, f3z (p2 .-. p1)]]
-
-
 
 class Boxable a where
     box :: a -> Box -- ^ Surrounding box for 'a'
@@ -68,25 +63,5 @@ hitsBoxed :: Ray -> Boxed a -> Bool
 ray `hitsBoxed` boxed = ray `hitsBox` (box boxed)
 --ray `hitsBoxed` boxed = True -- DEBUG
 
--- TODO: make this beautiful, loose the ugly imperative feel! ;P
-hitsBox :: Ray -> Box -> Bool
-ray `hitsBox` (Box p1 p2)
-    | tfar1 < tnear1   ||  tfar1 < 0  =  False
-    | tfar2 < tnear2   ||  tfar2 < 0  =  False
-    | tfar3 < tnear3   ||  tfar3 < 0  =  False
-    | otherwise                       =  True
-    where
-        distFromSlabs dir bound1 bound2 = if t1 < t2 then (t1, t2) else (t2, t1)
-            where
-                t1 = bound1 / dir
-                t2 = bound2 / dir
-        [dists1, dists2, dists3] = zipWith3 distFromSlabs 
-                                       (tupleToList (rayDir ray)) 
-                                       (tupleToList (p1 .-. rayOrigin ray))
-                                       (tupleToList (p2 .-. rayOrigin ray))
-        shrink (x,y) (a,b) = (maximum [x,a], minimum [y,b])
-        (tnear1, tfar1) = shrink (rayNear ray, rayFar ray) dists1
-        (tnear2, tfar2) = shrink (tnear1, tfar1) dists2
-        (tnear3, tfar3) = shrink (tnear2, tfar2) dists3
 
 -- vim: expandtab smarttab sw=4 ts=4
