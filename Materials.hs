@@ -17,7 +17,6 @@ import Haray
 import Ray
 import Material
 import Math
-import Object
 
 import Data.Maybe
 import Control.Applicative
@@ -118,7 +117,7 @@ instance Material Dielectric where
         r0 = ((n - 1) / (n + 1))^2 -- reflectance at normal incidence 
                                    -- (invar under n <-> 1/n)
         r = r0 + (1 - r0) * (1 - c)^5 -- Schlick's approx. to Fresnel's eq.
-        attenuation = tupleFromList $ map (\c -> exp(-c * (intDist int))) $ [ar, ag, ab]
+        attenuation = tupleFromList $ map (\a -> exp(-a * (intDist int))) $ [ar, ag, ab]
 
 -- | n is the ratio of the indices of refraction of the material being 
 -- exited (as determined by the direction vector) to the index of 
