@@ -27,7 +27,7 @@ data Diffuse    = Diffuse deriving Show
 mkDiffuse :: AnyMat
 mkDiffuse = MkAnyMat Diffuse
 
-data Phong      = Phong Flt deriving Show           -- ^ Phong exponent
+data Phong      = Phong Flt deriving Show -- ^ Phong exponent
 mkPhong :: Flt -> AnyMat
 mkPhong phongExponent = MkAnyMat $ Phong phongExponent
 
@@ -35,13 +35,13 @@ data Reflecting = Reflecting deriving Show
 mkReflecting :: AnyMat
 mkReflecting = MkAnyMat Reflecting
 
-data Glossy     = Glossy Flt Int deriving Show      -- ^ Glossiness and number of samples
+data Glossy     = Glossy Flt Int deriving Show -- ^ Glossiness and number of samples
 mkGlossy :: Flt -> Int -> AnyMat
 mkGlossy glossiness samples = MkAnyMat $ Glossy glossiness samples
 
-data Dielectric = Dielectric Flt deriving Show      -- ^ index of refraction
-mkDielectric :: Flt -> AnyMat
-mkDielectric n = MkAnyMat $ Dielectric n
+data Dielectric = Dielectric Flt (Flt, Flt, Flt) deriving Show
+mkDielectric :: Flt -> (Flt, Flt, Flt) -> AnyMat
+mkDielectric n attenuation = MkAnyMat $ Dielectric n attenuation
 
 data Texture    = Texture Tex deriving Show
 mkTexture :: Tex -> AnyMat
@@ -93,7 +93,7 @@ instance Material Texture where
         Nothing -> error "Trying to map texture on something without texture coordinates!"
         Just uv -> return $ (ilCol .***. f uv) .* (ilDir .*. (intNorm int))
 instance Material Dielectric where
-    colorMaterial int (Dielectric n) _ = do
+    colorMaterial int (Dielectric n (ar, ag, ab)) _ = do
         reflCol <- black `orRecurseOn` colorRay reflectedRay
         if intDir int .*. intNorm int < 0
         then do -- Entering the object
@@ -103,7 +103,7 @@ instance Material Dielectric where
         else -- Exiting the object
             case refractedRay of
                 Just refrRay -> colorRay refrRay >>= (\refrCol ->
-                                return (r *. reflCol  .+.  (1 - r) *. refrCol))
+                                return (r *. reflCol  .+.  (1 - r) *. (attenuation .***. refrCol)))
                 Nothing      -> return reflCol -- total internal reflection
      where
         nfactor = if (intDir int .*. intNorm int < 0)
@@ -118,6 +118,7 @@ instance Material Dielectric where
         r0 = ((n - 1) / (n + 1))^2 -- reflectance at normal incidence 
                                    -- (invar under n <-> 1/n)
         r = r0 + (1 - r0) * (1 - c)^5 -- Schlick's approx. to Fresnel's eq.
+        attenuation = tupleFromList $ map (\c -> exp(-c * (intDist int))) $ [ar, ag, ab]
 
 -- | n is the ratio of the indices of refraction of the material being 
 -- exited (as determined by the direction vector) to the index of 
