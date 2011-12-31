@@ -136,8 +136,8 @@ instance Material Dielectric where
         c = if (intDir int .*. intNorm int < 0)
                     then -(intDir int .*. intNorm int)
                     else (rayDir $ fromJust refractedRay) .*. intNorm int
-        r0 = sq $ (n - 1) / (n + 1) -- reflectance at normal incidence 
-                                    -- (invar under n <-> 1/n)
+        r0 = ((n - 1) / (n + 1))^2 -- reflectance at normal incidence 
+                                   -- (invar under n <-> 1/n)
         --r = r0 + (1 - r0) * (1 - c)^5 -- Schlick's approx. to Fresnel's eq.
         r = 0.1 :: Flt -- XXX DEBUG TODO
 
@@ -151,7 +151,7 @@ mkRefractedRay int n
     where
         norm  = intNorm int
         dir   = normalize $ intDir int
-        cosSq = 1  -  (sq n) * (1 - sq (dir .*. norm))
+        cosSq = 1  -  n^2 * (1 - (dir .*. norm)^2)
         refrDir = normalize $ n*.(dir .-. norm.*(dir .*. norm)) .-. norm.*(sqrt cosSq) -- TODO Normalized?
         refrRay = Ray (intPos int) refrDir epsilon infinity (intTotDist int)
 

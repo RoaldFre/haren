@@ -10,13 +10,6 @@ import Control.DeepSeq
 -- floating point format, easily switch between Float and Double
 type Flt = Double
 
--- This is to prevent "defaulting the following constraint(s) to type 
--- Integer" warning when using x^2 in code.
--- TODO: Just remove that warning and keep the code clean by using x^2
--- OR: is this (marginally?) faster [If GHC isn't smart enough to optimize]?
-sq :: Flt -> Flt
-sq x = x * x
-
 infinity :: Flt
 infinity = 1/0 -- It is as if a million mathematicians suddenly cried out in pain
 
