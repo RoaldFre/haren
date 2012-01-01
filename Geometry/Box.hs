@@ -1,5 +1,3 @@
-module Geometry.Box where
-{-
 module Geometry.Box (
     Box(..),
     mkBox,
@@ -8,7 +6,6 @@ module Geometry.Box (
     surfaceArea,
     hitsBox,
 ) where
--}
 
 import Math
 import Geometry
