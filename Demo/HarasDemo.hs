@@ -9,7 +9,7 @@ import OutputHaras
 
 main = do
     mesh <- parseObjFile "teapot.obj"
-    renderImage "test.ppm" (makeImg mesh)
+    renderImage "haras-teapot.ppm" (makeImg mesh)
 
 makeImg mesh = image
     where

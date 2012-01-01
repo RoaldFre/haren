@@ -3,7 +3,7 @@
 -- | Haras: a HAskell RASterizer.
 module Haras (
     RasterizerConfig(..),
-    Image(..),
+    Image,
     ColorChannel(..),
 
     rasterizeToImage,
@@ -17,14 +17,11 @@ import Color
 import Geometry.Triangles
 
 import Data.Array.ST
-import Data.Array.MArray
 import Data.Array.Unboxed
 import Data.Maybe
 import Control.Monad.ST
 import Control.Monad.State
-import Control.Monad.Trans.Class (lift)
 import Data.List
-import Control.Applicative
 
 data RasterizerConfig = RasterizerConfig {
         confRes     :: Resolution,
@@ -42,7 +39,6 @@ data RasterizerState s = RasterizerState {
         stateRes     :: Resolution,
         stateAmbient :: Color,
         stateLights  :: [Light],
-        stateCam     :: Camera,
         stateMatrix  :: M4,
         stateRaster  :: (Raster s),
         stateZbuf    :: (Zbuffer s)
@@ -50,7 +46,6 @@ data RasterizerState s = RasterizerState {
 getRes     = RZ $ gets stateRes
 getAmbient = RZ $ gets stateAmbient
 getLights  = RZ $ gets stateLights
-getCam     = RZ $ gets stateCam
 getMatrix  = RZ $ gets stateMatrix
 getRaster  = RZ $ gets stateRaster
 getZbuf    = RZ $ gets stateZbuf
@@ -67,7 +62,7 @@ rasterizeToImage (TriangleMesh mesh) col lights conf = runSTUArray $ do
     -- TODO change literals 'Red' & 'Blue' by some way to find max index.....
     raster <- newArray ((Pixel (0, 0), Red), (Pixel (nx-1, ny-1), Blue)) 0
     zbuffer <- newArray (Pixel (0,0), Pixel (nx-1, ny-1)) (-2)
-    let initialState = RasterizerState res ambient lights cam matr raster zbuffer
+    let initialState = RasterizerState res ambient lights matr raster zbuffer
     evalStateT (fromRZ $ rasterize col mesh) initialState
     return raster
     where
@@ -145,7 +140,7 @@ viewM cam = rotate .*. translate
 
 
 rasterizeTriangle :: Color -> Triangle -> Rasterizer s ()
-rasterizeTriangle col triangle@(Triangle v1 v2 v3) = do
+rasterizeTriangle col (Triangle v1 v2 v3) = do
     [rv1, rv2, rv3] <- mapM vertexShader [v1, v2, v3]
     amb <- getAmbient
     res <- getRes
@@ -259,10 +254,10 @@ pixelShader ambient (RasterTriangle v1 v2 v3) col (a, b, c) =
         interpolate t1 t2 t3 = t1 .* a  .+.  t2 .* b  .+.  t3 .* c
 
 shading :: Color -> Color -> UVec3 -> [IncidentLight] -> Color
-shading ambient col normal incidentLights =
+shading ambient col normal ils =
     ambient .+. col .***. (foldl' (.+.) black contributions)
     where
-        contributions = mapMaybe shading' incidentLights
+        contributions = mapMaybe shading' ils
         shading' (ilDir, ilCol)
             | projection < 0 = Nothing
             | otherwise      = Just $ ilCol .* projection

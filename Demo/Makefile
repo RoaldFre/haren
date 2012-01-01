@@ -2,6 +2,7 @@ all: teapot scenegraph materials
 
 include ../Makefile.inc
 
+#Haray
 teapot:
 	ghc -i.. ${OPTS} ${BACKEND} --make Teapot
 scenegraph:
@@ -9,4 +10,7 @@ scenegraph:
 materials:
 	ghc -i.. ${OPTS} ${BACKEND} --make Materials
 
-.DEFAULT_GOAL := all
+
+#Haras
+haras:
+	ghc -i.. ${OPTS} ${BACKEND} --make HarasDemo
