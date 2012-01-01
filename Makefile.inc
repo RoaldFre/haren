@@ -13,17 +13,44 @@ WARNINGS=-Wall -fno-warn-missing-signatures -fno-warn-orphans -fno-warn-type-def
 FORCE=
 COMMON_OPTS=-rtsopts -threaded -funbox-strict-fields -fexcess-precision -fmax-worker-args=40 ${RTS_OPTS} ${WARNINGS} ${FORCE}
 
-OPTS=${COMMON_OPTS} -funfolding-use-threshold=1000 -funfolding-creation-threshold=1000 -fspec-constr-count=64 -fspec-constr-threshold=1000
+OPTS=${COMMON_OPTS} -funfolding-use-threshold=2000 -funfolding-creation-threshold=2000 -fspec-constr-count=64 -fspec-constr-threshold=2000
 
 OPTS_QUICK=${COMMON_OPTS} -O2 -funfolding-use-threshold=200 -funfolding-creation-threshold=200
 
+
+#conditionals (is there a better way/can we get flags?)
+#use 'make target GCC= F=' to force a remake of target with the gcc backend
+F=no
+GCC=no
+LLVM=no
+ifneq ($F, no)
+	FORCE='-fforce-recomp'
+endif
+ifneq ($(GCC), no)
+	BACKEND=$(BACKEND_C)
+endif
+ifneq ($(LLVM), no)
+	BACKEND=$(BACKEND_LLVM_AGRESSIVE)
+endif
+
+
+
+#these work on the default target:
+
 force:
-	${MAKE} all FORCE=-fforce-recomp
+	@${MAKE} FORCE='-fforce-recomp'
 gcc:
-	${MAKE} force BACKEND=${BACKEND_C}
+	@${MAKE} BACKEND='${BACKEND_C}'
 agg:
-	${MAKE} force BACKEND=${BACKEND_LLVM_AGRESSIVE}
+	@${MAKE} BACKEND='${BACKEND_LLVM_AGRESSIVE}'
 basic:
-	${MAKE} force BACKEND=${BACKEND_LLVM_BASIC}
+	@${MAKE} BACKEND='${BACKEND_LLVM_BASIC}'
+
+forcegcc:
+	@${MAKE} force BACKEND='${BACKEND_C}'
+forceagg:
+	@${MAKE} force BACKEND='${BACKEND_LLVM_AGRESSIVE}'
+forcebasic:
+	@${MAKE} force BACKEND='${BACKEND_LLVM_BASIC}'
 
 # vim: ft=make

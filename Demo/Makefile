@@ -1,4 +1,4 @@
-all: teapot scenegraph materials
+all: teapot scenegraph materials ifs haras
 
 include ../Makefile.inc
 
@@ -9,7 +9,8 @@ scenegraph:
 	ghc -i.. ${OPTS} ${BACKEND} --make SceneGraph
 materials:
 	ghc -i.. ${OPTS} ${BACKEND} --make Materials
-
+ifs:
+	ghc -i.. ${OPTS} ${BACKEND} --make IFS
 
 #Haras
 haras:
