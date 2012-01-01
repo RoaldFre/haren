@@ -8,7 +8,6 @@ module Renderer (
 	resToPix,
 	flipHoriz,
 
-	-- TODO export full modules?
 	Color(..),
 	Scene(..),
 ) where
