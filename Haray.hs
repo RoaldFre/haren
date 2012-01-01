@@ -234,13 +234,7 @@ colorRay ray = do
     ambient <- getAmbient
     case (intersectFirst scene ray) of
         Nothing  -> return black
-        Just int -> fmap (\c -> ambient .+. (attenuate (intTotDist int) c)) $ color int
-        --Nothing -> return red
-        --Just int -> return white
-
-attenuate :: Flt -> Color -> Color
---attenuate dist col = col ./. dist^2
-attenuate dist col = col
+        Just int -> fmap (.+. ambient) $ color int
 
 -- | Calculate the Color of the given ObjIntersection
 color :: ObjIntersection -> RayTracer Color
