@@ -1,3 +1,5 @@
+module Geometry.Box where
+{-
 module Geometry.Box (
     Box(..),
     mkBox,
@@ -6,6 +8,7 @@ module Geometry.Box (
     surfaceArea,
     hitsBox,
 ) where
+-}
 
 import Math
 import Geometry
@@ -47,10 +50,10 @@ ray `hitsBox` box = not $ null $ intersectBox box ray
 -- TODO: make this beautiful, loose the ugly imperative feel! ;P
 intersectBox :: Box -> Ray -> [GeomIntersection]
 intersectBox (Box p1 p2) ray
-    | (dist far1) < (dist near1)   ||  (dist far1) < 0  =  []
-    | (dist far2) < (dist near2)   ||  (dist far2) < 0  =  []
-    | (dist far3) < (dist near3)   ||  (dist far3) < 0  =  []
-    | otherwise = mkGeomInts ray [near3, far3]
+    |                                  (dist far1) < (rayNear ray)  =  []
+    | (dist far2) < (dist near2)   ||  (dist far2) < (rayNear ray)  =  []
+    | (dist far3) < (dist near3)   ||  (dist far3) < (rayNear ray)  =  []
+    | otherwise = mkGeomInts ray $ finalNear ++ finalFar
     where
         distFromSlabs dir bound1 bound2 = if t1 < t2 then (t1, t2) else (t2, t1)
             where
@@ -60,13 +63,14 @@ intersectBox (Box p1 p2) ray
                                        (tupleToList (rayDir ray)) 
                                        (tupleToList (p1 .-. rayOrigin ray))
                                        (tupleToList (p2 .-. rayOrigin ray))
-        initialDistsAndNorms = addNorm ray f3zero (rayNear ray, rayFar ray)
         distsAndNorms1 = addNorm ray f3e1 dists1
         distsAndNorms2 = addNorm ray f3e2 dists2
         distsAndNorms3 = addNorm ray f3e3 dists3
-        (near1, far1) = shrink initialDistsAndNorms distsAndNorms1
+        (near1, far1) = distsAndNorms1
         (near2, far2) = shrink (near1, far1) distsAndNorms2
         (near3, far3) = shrink (near2, far2) distsAndNorms3
+        finalNear = if dist near3 >= rayNear ray then [near3] else []
+        finalFar  = if dist far3  <= rayFar  ray then [far3]  else []
 
 
 type DistAndNorm = (Flt, UVec3)
