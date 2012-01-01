@@ -45,3 +45,6 @@ demos:
 
 clean:
 	rm -f *.hi{,-boot} *.o{,-boot} *.hc *.hp *.ps *.prof *.aux
+	cd Material; rm -f *.hi{,-boot} *.o{,-boot} *.hc *.hp *.ps *.prof *.aux
+	cd Geometry; rm -f *.hi{,-boot} *.o{,-boot} *.hc *.hp *.ps *.prof *.aux
+	cd Demo; rm -f *.hi{,-boot} *.o{,-boot} *.hc *.hp *.ps *.prof *.aux
