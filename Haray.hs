@@ -15,10 +15,8 @@ import Renderer
 import BVH
 
 
--- TODO which can be removed?
 import Data.List hiding (transpose, intersect)
 import Data.Maybe
---import System.Random.Mersenne.Pure64
 import System.Random
 
 import Control.Monad.State hiding (state)
@@ -32,23 +30,19 @@ data RayTraceConfig = RayTraceConfig {
         confDepth     :: Int,
         confAAsamples :: Int,
         confSeed      :: Int,
-        confRes       :: Resolution, -- TODO, this and cam are shared with rasterizer, not part of raytracer per se
-        confCam       :: Camera,
-        confAmbient   :: Color
+        confRes       :: Resolution,
+        confCam       :: Camera
     } deriving Show
 
 
--- TODO name && ...something like AnyIntersectable "class"?
 type ObjIntersectable = AnyIntersectable Object
 
--- TODO: make (some of) these strict?
 data RayTraceState = RayTraceState {
         stateScene     :: ObjIntersectable,
         stateLights    :: [Light],
-        stateAmbient   :: Color,
         stateDepth     :: Int,
         stateAAsamples :: Int,
-        stateRndGen    :: StdGen, -- ^ Random number generator
+        stateRndGen    :: StdGen,
         stateRes       :: Resolution,
         stateCam       :: Camera,
         stateMaxDepth  :: Int
@@ -56,14 +50,13 @@ data RayTraceState = RayTraceState {
 
 mkInitialState :: Scene -> RayTraceConfig -> RayTraceState
 mkInitialState scene conf =
-    RayTraceState internalScene lights ambient depth aa rndGen res cam depth
+    RayTraceState internalScene lights depth aa rndGen res cam depth
     where
         depth = confDepth conf
         aa = confAAsamples conf
         rndGen = mkStdGen $ confSeed conf
         res = confRes conf
         cam = confCam conf
-        ambient = confAmbient conf
         internalScene = optimizeSceneGraph $ sGraph scene
         lights = sLights scene
 
@@ -81,7 +74,6 @@ evaluate (RT action) state = evalState action state
 getState     = RT $ get
 getRes       = RT $ gets stateRes
 getLights    = RT $ gets stateLights
-getAmbient   = RT $ gets stateAmbient
 getDepth     = RT $ gets stateDepth
 decDepth     = getDepth >>= (\d -> RT $ modify (\s -> s {stateDepth = d - 1}))
 getAAsamples = RT $ gets stateAAsamples
@@ -154,10 +146,6 @@ getStdNorms num stdev = replicateM num $ getStdNorm stdev
 
 
 -- | Find the closest intersection of the ray with an intersectable. 
---
--- TODO this isn't true any more:
--- Only intersections where the ray enters the objects from the outside (as 
--- determined by the normal) are considered.
 intersectFirst :: ObjIntersectable -> Ray -> Maybe ObjIntersection
 intersectFirst intersectable ray =
     case intersect ray intersectable of
@@ -231,10 +219,9 @@ colorRays n rays = do
 colorRay :: Ray -> RayTracer Color
 colorRay ray = do
     scene <- getScene
-    ambient <- getAmbient
     case (intersectFirst scene ray) of
         Nothing  -> return black
-        Just int -> fmap (.+. ambient) $ color int
+        Just int -> color int
 
 -- | Calculate the Color of the given ObjIntersection
 color :: ObjIntersection -> RayTracer Color
