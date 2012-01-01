@@ -13,7 +13,7 @@ WARNINGS=-Wall -fno-warn-missing-signatures -fno-warn-orphans -fno-warn-type-def
 FORCE=
 COMMON_OPTS=-rtsopts -threaded -funbox-strict-fields -fexcess-precision -fmax-worker-args=40 ${RTS_OPTS} ${WARNINGS} ${FORCE}
 
-OPTS=${COMMON_OPTS} -funfolding-use-threshold=2000 -funfolding-creation-threshold=2000 -fspec-constr-count=64 -fspec-constr-threshold=2000
+OPTS=${COMMON_OPTS} -O3 -funfolding-use-threshold=1000 -funfolding-creation-threshold=1000 -fspec-constr-count=64 -fspec-constr-threshold=1000
 
 OPTS_QUICK=${COMMON_OPTS} -O2 -funfolding-use-threshold=200 -funfolding-creation-threshold=200
 
@@ -23,6 +23,7 @@ OPTS_QUICK=${COMMON_OPTS} -O2 -funfolding-use-threshold=200 -funfolding-creation
 F=no
 GCC=no
 LLVM=no
+Q=no
 ifneq ($F, no)
 	FORCE='-fforce-recomp'
 endif
@@ -31,6 +32,9 @@ ifneq ($(GCC), no)
 endif
 ifneq ($(LLVM), no)
 	BACKEND=$(BACKEND_LLVM_AGRESSIVE)
+endif
+ifneq ($Q, no)
+	OPTS=$(OPTS_QUICK)
 endif
 
 
