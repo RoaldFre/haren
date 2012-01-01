@@ -43,7 +43,7 @@ matDielectr = mkDielectric 1.5 (0.1, 0.1, 0.1)
 matTexture  = mkTexture $ checkers (0.2 *. blue) (1.0 *. white) 200 1000
 
 planeMat = matTexture
-planeGeom = MkAnyGeom $ mkPlane (F3 (-100) 0 (100)) (F3 200 0 0) (F3 0 0 (-1000))
+planeGeom = MkAnyGeom $ mkPlane (F3 (-100) 0 (100)) (F3 200 0 0) (F3 0 0 (-1000)) f3e2
 plane = Object planeGeom planeMat
 
 geom = mkSphere

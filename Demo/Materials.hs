@@ -19,7 +19,7 @@ import Material.Dielectric
 import Material.Texture
 
 import OutputSDL
---import OutputPPM
+import OutputPPM
 
 import System.Random
 
@@ -27,11 +27,8 @@ outfile = "materials.ppm"
 
 main = do
     gen <- getStdGen
-    --renderPPM outfile scene $ mkConf gen
-    renderSDL PerLine scene $ mkConf gen
-
-res = Resolution (400, 250)
-cam = camLookingAt (F3 2.2 3.5 15) (F3 0.5 (-0.4) 0) f3e2 20
+    renderPPM outfile scene $ mkConf gen
+    --renderSDL PerLine scene $ mkConf gen
 
 matAmbient  = mkAmbient (0.8 *. white)
 matDiffuse  = mkDiffuse
@@ -42,7 +39,7 @@ matDielectr = mkDielectric 1.5 (0.1, 0.1, 0.1)
 matTexture  = mkTexture $ checkers (0.2 *. blue) (1.0 *. white) 200 1000
 
 planeMat = matTexture
-planeGeom = MkAnyGeom $ mkPlane (F3 (-100) 0 (100)) (F3 200 0 0) (F3 0 0 (-1000))
+planeGeom = MkAnyGeom $ mkPlane (F3 (-100) 0 (100)) (F3 200 0 0) (F3 0 0 (-1000)) f3e2
 plane = Object planeGeom planeMat
 
 geom = mkSphere
@@ -65,19 +62,22 @@ back = Light (mkSoftBox (F3 10 9 (-5))  (F3 0 0 (-2)) (F3 0 2 0) f3zero n) (130 
 lights = [key, back]
 scene = Scene lights objs
 
-{-
+--{-
 n              = 4
 nGlossy        = 10
 recursionDepth = 4
 aaSamples      = 3
--}
+---}
 
---{-
+{-
 n              = 1
 nGlossy        = 1
 recursionDepth = 4
 aaSamples      = 1
----}
+-}
+
+res = Resolution (400, 250)
+cam = camLookingAt (F3 2.2 3.5 15) (F3 0.5 (-0.4) 0) f3e2 20
 
 mkConf stdgen = RayTraceConfig recursionDepth aaSamples stdgen res cam
 
