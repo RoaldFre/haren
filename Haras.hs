@@ -1,7 +1,13 @@
 {-# LANGUAGE DeriveFunctor, GeneralizedNewtypeDeriving #-}
 
 -- | Haras: a HAskell RASterizer.
-module Haras where
+module Haras (
+    RasterizerConfig(..),
+    Image(..),
+    ColorChannel(..),
+
+    rasterizeToImage,
+) where
 
 import Math hiding (transpose)
 import Renderer
@@ -54,26 +60,6 @@ newtype Rasterizer s a = RZ (StateT (RasterizerState s) (ST s) a)
     deriving (Monad, Functor)
 
 
-{-
---instance Renderer RayTraceConfig RayTracer where
-instance RendererST RasterizerConfig (Rasterizer s) s where
-    --colorPixel = rasterize
-    colorPixel_ = undefined
-    getResolution_ = getRes
-    run_ = runRasterizer
-
--- SOOOOOOO CLOSE!!!
-runRasterizer scene conf (RZ computation) = runST $ do
-    image   <- newArray ((Pixel (0, 0), Red), (Pixel (nx-1, ny-1), Blue)) 0 -- TODO 'Red' & 'Blue' .....
-    zbuffer <- newArray (Pixel (0,0), Pixel (nx-1, ny-1)) 0
-    let initialState = RasterizerState res ambient lights image zbuffer
-    evalStateT computation initialState
-    where
-        res@(Resolution (nx, ny)) = confRes conf
-        ambient = confAmbient conf
-        lights  = sLights scene
--}
-
 type Image = UArray (Pixel, ColorChannel) Flt
 
 rasterizeToImage :: TriangleMesh -> Color -> [Light] -> RasterizerConfig -> Image
@@ -99,7 +85,6 @@ rasterize col triangles = forM_ triangles $ rasterizeTriangle col
 -- The direction is normalised to unity.
 type IncidentLight = (UVec3, Color)
 
--- TODO strict?
 data RasterVertex = RasterVertex {
         rvPos   :: !Pt2,           -- ^ Position in screen space
         rvDepth :: !Flt,           -- ^ Z coordinate
@@ -107,7 +92,6 @@ data RasterVertex = RasterVertex {
         rvIL    :: [IncidentLight] -- ^ Incident light (world space)
     }
 
--- TODO strict?
 data RasterTriangle = RasterTriangle RasterVertex RasterVertex RasterVertex
 
 -- | The full perspective projection matrix that takes points from 
