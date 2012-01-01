@@ -3,78 +3,81 @@ import Haray
 import Math
 import Scene
 import Object
-import ObjParser 
-import Materials
-import Geometry.Triangles
 import Geometry.Plane
+import Geometry.Sphere
 import Transform
 import Camera
 import Light
 import Renderer
 
+import Material.Ambient
+import Material.Diffuse
+import Material.Phong
+import Material.Reflecting
+import Material.Glossy
+import Material.Dielectric
+import Material.Texture
+
 import OutputSDL
 --import OutputPPM
 
 main = do
-    mesh <- parseObjFile "teapot.obj"
-    --let optimMesh = optimizeTriangleMesh 10 mesh
-    let optimMesh = optimizeTriangleMeshFast 10 mesh
-    --renderPPM "./out.ppm" (testScene optimMesh) testConf
-    --renderSDL PerLine (testScene optimMesh) testConf
-    renderSDL PerPixel (testScene optimMesh) testConf
+    --renderPPM outfile scene config
+    renderSDL PerLine scene config
 
-testScene anyGeom = scene
+config = RayTraceConfig recursionDepth aaSamples seed res cam (0.0*.white)
     where
-        matDiff   = mkDiffuse
-        matPhong  = mkPhong 25
-        matRefl   = mkReflecting
-        matGlossyTp = mkGlossy 0.10 nGlossyTp
-        matGlossyPlane = mkGlossy 0.08 nGlossyPlane
-        matTexture = mkTexture $ checkers (0.2 *. white) white 200 1000
-        mat = combineMats [matDiff, matPhong]
+        res = Resolution (400, 250)
+        cam = camLookingAt (F3 2.2 3.5 15) (F3 0.5 (-0.4) 0) f3e2 20
 
+scene = theScene
+    where
+        matAmbient  = mkAmbient (0.8 *. white)
+        matDiffuse  = mkDiffuse
+        matPhong    = mkPhong 35
+        matRefl     = mkReflecting
+        matGlossy   = mkGlossy 0.08 nGlossy
+        matDielectr = mkDielectric 1.5 (0.1, 0.1, 0.1)
+        matTexture  = mkTexture $ checkers (0.2 *. blue) (1.0 *. white) 200 1000
+
+        planeMat = matTexture
         planeGeom = MkAnyGeom $ mkPlane (F3 (-100) 0 (100)) (F3 200 0 0) (F3 0 0 (-1000))
-        planeMat = combineMats [matTexture]
-
         plane = Object planeGeom planeMat
 
-        objs = Fork [Node Identity (Leaf (Object anyGeom mat))
-                    ,Node Identity (Leaf plane)]
+        geom = mkSphere
+        
+        s = 1.2
+        objs = Fork [Node (Translation (F3 0 (-1) 0)) (Leaf plane)
+                    ,Node (Translation (F3 (-2.5*s) 0 (-2.5))) $
+                            Fork [Node (Translation (F3 (0*s) 0 0)) (Leaf $ Object geom matAmbient)
+                                 ,Node (Translation (F3 (1*s) 0 1)) (Leaf $ Object geom matDiffuse)
+                                 ,Node (Translation (F3 (2*s) 0 2)) (Leaf $ Object geom matPhong)
+                                 ,Node (Translation (F3 (3*s) 0 3)) (Leaf $ Object geom matRefl)
+                                 ,Node (Translation (F3 (4*s) 0 4)) (Leaf $ Object geom matGlossy)
+                                 ,Node (Translation (F3 (5*s) 0 5)) (Leaf $ Object geom matDielectr)]
+                     ]
+                         
 
-
-        key   = Light (mkSoftBox (F3 5 0 3) (F3 (1) 0 (0)) (F3 0 6 0) n) (40 *. white)
-        strip = Light (mkSoftBox (F3 (-1.8) 0 3) (F3 (0.1) 0 (0)) (F3 0 6 0) n) (10 *. white)
-        rim   = Light (mkSoftBox (F3 (-11) 0 (-5)) (F3 0 4 0) (F3 3 0 (-8)) n) (100 *. white)
-        top   = Light (mkSoftBox (F3 (4) 5 (-7)) (F3 (1) 0 (1)) (F3 (-0.8) 1 0.8) n) (15 *. white)
-        top2  = Light (mkSoftBox (F3 (-4) 5 (-7)) (F3 (-1) 0 (1)) (F3 (-0.8) 1 0.8) n) (40 *. white)
-        --bounce = Light (Softbox (F3 (-2) (0.1) (2)) (F3 4 0 0) (F3 0 0 (-2)) n) (0.2 *. white)
-        lights = [key, strip, rim, top, top2]
-        scene = Scene lights objs
+        key  = Light (mkSoftBox (F3 (-15) 10 8) (F3 2 0 2) (F3 0 2 0) f3zero n) (200 *. white)
+        back = Light (mkSoftBox (F3 10 9 (-5))  (F3 0 0 (-2)) (F3 0 2 0) f3zero n) (130 *. white)
+        lights = [key, back]
+        theScene = Scene lights objs
 
 {-
 n              = 4
-nGlossyTp      = 40
-nGlossyPlane   = 30
-recursionDepth = 2
+nGlossy        = 10
+recursionDepth = 4
 aaSamples      = 3
-seed           = 1
+seed           = 0
 -}
 
 --{-
 n              = 1
-nGlossyTp      = 1
-nGlossyPlane   = 1
-recursionDepth = 1
+nGlossy        = 1
+recursionDepth = 4
 aaSamples      = 1
 seed           = 0
 ---}
 
-
-testConf = RayTraceConfig recursionDepth aaSamples seed res cam (0.0*.white)
-    where
-        res = Resolution (200, 150)
-        cam = camLookingAt (F3 0 4.4 (10)) (F3 0 0.95 0) f3e2 35
-
----}
 
 -- vim: expandtab smarttab sw=4 ts=4
