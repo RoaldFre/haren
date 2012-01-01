@@ -21,9 +21,15 @@ import Material.Texture
 import OutputSDL
 --import OutputPPM
 
+import System.Random
+
+outfile = "main.ppm"
+
+
 main = do
-    --renderPPM outfile scene config
-    renderSDL PerLine scene config
+    gen <- getStdGen
+    --renderPPM outfile scene $ mkConf gen
+    renderSDL PerLine scene $ mkConf gen
 
 res = Resolution (400, 250)
 cam = camLookingAt (F3 2.2 3.5 15) (F3 0.5 (-0.4) 0) f3e2 20
@@ -65,7 +71,6 @@ n              = 4
 nGlossy        = 10
 recursionDepth = 4
 aaSamples      = 3
-seed           = 0
 -}
 
 --{-
@@ -73,10 +78,9 @@ n              = 1
 nGlossy        = 1
 recursionDepth = 4
 aaSamples      = 1
-seed           = 0
 ---}
 
-config = RayTraceConfig recursionDepth aaSamples seed res cam
+mkConf stdgen = RayTraceConfig recursionDepth aaSamples stdgen res cam
 
 
 -- vim: expandtab smarttab sw=4 ts=4

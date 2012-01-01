@@ -29,7 +29,7 @@ import Prelude hiding (concatMap)
 data RayTraceConfig = RayTraceConfig {
         confDepth     :: Int,
         confAAsamples :: Int,
-        confSeed      :: Int,
+        confStdGen    :: StdGen,
         confRes       :: Resolution,
         confCam       :: Camera
     } deriving Show
@@ -54,7 +54,7 @@ mkInitialState scene conf =
     where
         depth = confDepth conf
         aa = confAAsamples conf
-        rndGen = mkStdGen $ confSeed conf
+        rndGen = confStdGen conf
         res = confRes conf
         cam = confCam conf
         internalScene = optimizeSceneGraph $ sGraph scene
