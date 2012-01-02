@@ -39,10 +39,35 @@ surfaceArea :: Box -> Flt
 surfaceArea (Box p1 p2) = 2 * (x*y + y*z + z*x)
     where (F3 x y z) = p2 .-. p1
 
+hitsBox :: Ray -> Box -> Bool
+-- SADLY the commented stuff below won't work, because hitsBox should give True when the ray is entirely *inside* the box (ie a short ray in a large box), buth this won't result in an intersection!
+-- Hence, I've just written the code out in full, which is potentially faster as well (if GHC can't optimize sufficiently the normal-dragging-along of the code below).
+{-
 -- Note: compiler will/should specialize this/inline intersectBox to loose 
 -- all the normal-dragging-along code from intersectBox. (TODO: verify)
-hitsBox :: Ray -> Box -> Bool
 ray `hitsBox` box = not $ null $ intersectBox box ray
+-}
+--ray `hitsBox` box = True -- DEBUG
+ray `hitsBox` (Box p1 p2)
+    | tfar1 < tnear1 || tfar1 < 0 = False
+    | tfar2 < tnear2 || tfar2 < 0 = False
+    | tfar3 < tnear3 || tfar3 < 0 = False
+    | otherwise = True
+    where
+        distFromSlabs dir bound1 bound2 = if t1 < t2 then (t1, t2) else (t2, t1)
+            where
+                t1 = bound1 / dir
+                t2 = bound2 / dir
+        [dists1, dists2, dists3] = zipWith3 distFromSlabs
+                                       (tupleToList (rayDir ray))
+                                       (tupleToList (p1 .-. rayOrigin ray))
+                                       (tupleToList (p2 .-. rayOrigin ray))
+        shrink' (x,y) (a,b) = (maximum [x,a], minimum [y,b])
+        (tnear1, tfar1) = shrink' (rayNear ray, rayFar ray) dists1
+        (tnear2, tfar2) = shrink' (tnear1, tfar1) dists2
+        (tnear3, tfar3) = shrink' (tnear2, tfar2) dists3
+
+
 
 -- TODO: make this beautiful, loose the ugly imperative feel! ;P
 intersectBox :: Box -> Ray -> [GeomIntersection]
@@ -87,7 +112,6 @@ shrink (near1, far1)  (near2, far2)  =  (near, far)
         far  = if (dist far1 ) < (dist far2 ) then far1  else far2
 
 mkGeomInts :: Ray -> [DistAndNorm] -> [GeomIntersection]
-mkGeomInts ray dns =
-    map (\(t, n) -> makeGeomInt ray t n Nothing) dns
+mkGeomInts ray = map $ \(t, n) -> makeGeomInt ray t n Nothing
 
 -- vim: expandtab smarttab sw=4 ts=4
