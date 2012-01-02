@@ -14,13 +14,13 @@ infinity :: Flt
 infinity = 1/0 -- It is as if a million mathematicians suddenly cried out in pain
 
 epsilon :: Flt
-epsilon = radix ** (-digits / 2)
+epsilon = radix ** (-digits / 3)
     where
         radix  = fromIntegral $ floatRadix (1 :: Flt)
         digits = fromIntegral $ floatDigits (1 :: Flt)
 
 smallest :: Flt
-smallest = radix ** (minExp / 2)
+smallest = radix ** (minExp / 3)
     where
         radix  = fromIntegral $ floatRadix (1 :: Flt)
         minExp = fromIntegral $ fst $ floatRange (1 :: Flt)
