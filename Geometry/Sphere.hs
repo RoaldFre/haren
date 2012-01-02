@@ -16,7 +16,7 @@ mkSphere = MkAnyGeom Sphere
 instance Geometry Sphere where
     boundingBox Sphere = Box (F3 (-1) (-1) (-1)) (F3 1 1 1)
     intersectGeom Sphere ray@(Ray e d mint maxt _) =
-        [makeGeomInt ray t (sphereNormal t) Nothing | t <- ts, mint < t, t < maxt]
+        [makeGeomInt ray t (sphereNormal t) Nothing | t <- ts, mint <= t, t <= maxt]
         where
             ts = solveQuadEq
                     (d .*. d)
