@@ -10,7 +10,7 @@ BACKEND_LLVM_AGGRESSIVE=-fllvm -optlo-basicaa -optlo-basiccg -optlo-count-aa -op
 
 BACKEND=${BACKEND_C}
 
-RTS_OPTS=-with-rtsopts="-N"
+RTS_OPTS=-with-rtsopts="-N -K100m"
 WARNINGS=-Wall -fno-warn-missing-signatures -fno-warn-orphans -fno-warn-type-defaults
 FORCE=
 COMMON_OPTS=-rtsopts -threaded -funbox-strict-fields -fexcess-precision -fmax-worker-args=40 ${RTS_OPTS} ${WARNINGS} ${FORCE}
