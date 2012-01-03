@@ -1,15 +1,15 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 
 module Renderer (
-	Renderer(..),
-	Pixel(..),
-	pixToPt,
-	Resolution(..),
-	resToPix,
-	flipHoriz,
+    Renderer(..),
+    Pixel(..),
+    pixToPt,
+    Resolution(..),
+    resToPix,
+    flipHoriz,
 
-	Color(..),
-	Scene(..),
+    Color(..),
+    Scene(..),
 ) where
 
 import Color
