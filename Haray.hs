@@ -26,6 +26,10 @@ import Control.Parallel.Strategies
 
 import Prelude hiding (concatMap)
 
+
+-- TODO read up on build/foldr/fusion and use it!
+
+
 data RayTraceConfig = RayTraceConfig {
         confDepth     :: Int,
         confAAsamples :: Int,
@@ -212,7 +216,7 @@ colorRays :: Int -> [Ray] -> RayTracer Color
 colorRays n rays = do
     states <- forkStates
     let contributions = parMap rdeepseq (\(r, s) -> evaluate (colorRay r) s) $ zip rays states
-    let combined = foldl (.+.) black contributions -- TODO foldl': strict would kill sparks ?
+    let combined = foldl (.+.) black contributions -- not foldl': would kill sparks!
     return $ combined ./. ((fromIntegral n)::Flt)
 
 -- | Compute the color of the given ray.

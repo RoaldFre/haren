@@ -34,7 +34,7 @@ main = do
     mesh <- parseObjFile "../obj/teapot.obj"
     let meshOptim = optimizeTriangleMesh 15 mesh
     gen <- getStdGen
-    renderPPM outfile (mkScene meshOptim) $ mkConf gen
+    renderPPM 100 outfile (mkScene meshOptim) $ mkConf gen
     --renderSDL PerLine (mkScene meshOptim) $ mkConf gen
 
 mkScene geom = scene

@@ -32,7 +32,7 @@ outfile = "IFS1-d-menger.ppm"
 main = do
     setCurrentDirectory dir
     gen <- getStdGen
-    renderPPM outfile mkScene $ mkConf gen
+    renderPPM 100 outfile mkScene $ mkConf gen
     --renderSDL PerLine mkScene $ mkConf gen
 
 mkScene = scene

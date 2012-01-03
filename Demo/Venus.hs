@@ -31,7 +31,7 @@ main = do
     venusMesh <- parseObjFile "../obj/venus.obj"
     let venusOptim = optimizeTriangleMesh 5 venusMesh
     gen <- getStdGen
-    renderPPM outfile (mkScene venusOptim) $ mkConf gen
+    renderPPM 100 outfile (mkScene venusOptim) $ mkConf gen
     --renderSDL PerLine (mkScene venusOptim) $ mkConf gen
 
 mkScene venusGeom = scene

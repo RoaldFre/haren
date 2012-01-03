@@ -31,7 +31,7 @@ main = do
     treeMesh <- parseObjFile "../obj/treebranches.obj"
     let treeOptim = optimizeTriangleMesh 15 treeMesh
     gen <- getStdGen
-    renderPPM outfile (mkScene treeOptim) $ mkConf gen
+    renderPPM 100 outfile (mkScene treeOptim) $ mkConf gen
     --renderSDL PerLine (mkScene treeOptim) $ mkConf gen
 
 

@@ -28,7 +28,7 @@ import System.Random
 import System.Directory
 
 dir = "/home/roald/source/haren/Demo"
-outfile = "chess-n2-glossy2-depth2-AA3-500-kingqueen.ppm"
+outfile = "chess-n3-glossy3-depth5-AA3-1k.ppm"
 
 main = do
     setCurrentDirectory dir
@@ -52,7 +52,7 @@ main = do
 
     gen <- getStdGen
     let scene = mkScene kingGeom queenGeom bishopGeom horseGeom rookGeom pawnGeom
-    renderPPM outfile scene $ mkConf gen
+    renderPPM 100 outfile scene $ mkConf gen
     --renderSDL PerLine scene $ mkConf gen
 
 
@@ -170,24 +170,24 @@ room = Node (Translation $ (-epsilon) *. f3e2) $ Fork [Leaf floorObj, Leaf backO
 
 
 {-
-n              = 2
-nGlossy        = 20
-recursionDepth = 25
+n              = 1
+nGlossy        = 1
+recursionDepth = 1
 aaSamples      = 2
 -}
 
 --{-
-n              = 2
-nGlossy        = 2--5
-recursionDepth = 2--10
+n              = 3
+nGlossy        = 3--5
+recursionDepth = 5--10
 aaSamples      = 3
 ---}
 
 --res = Resolution (450, 200)
 --res = Resolution (675, 300)
-res = Resolution (1125, 500)
---res = Resolution (1350, 600)
-cam = camLookingAt (F3 (-9.0) 9.5 30) (F3 0.9 0.2 0) f3e2 13
+--res = Resolution (1125, 500)
+res = Resolution (2250, 1000)
+cam = camLookingAt (F3 (-9.0) 9.5 30) (F3 0.9 0.2 0) f3e2 13 --13 XXX TODO DON'T FORGET THIS!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 13
 
 mkConf stdgen = RayTraceConfig recursionDepth aaSamples stdgen res cam
 

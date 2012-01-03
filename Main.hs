@@ -18,8 +18,8 @@ import Material.Glossy
 import Material.Dielectric
 import Material.Texture
 
-import OutputSDL
---import OutputPPM
+--import OutputSDL
+import OutputPPM
 
 import System.Random
 
@@ -28,8 +28,8 @@ outfile = "main.ppm"
 
 main = do
     gen <- getStdGen
-    --renderPPM outfile scene $ mkConf gen
-    renderSDL PerLine scene $ mkConf gen
+    renderPPM 100 outfile scene $ mkConf gen
+    --renderSDL PerLine scene $ mkConf gen
 
 matAmbient  = mkAmbient (0.8 *. white)
 matDiffuse  = mkDiffuse
@@ -71,13 +71,15 @@ aaSamples      = 3
 -}
 
 --{-
-n              = 1
-nGlossy        = 1
+n              = 3
+nGlossy        = 10
 recursionDepth = 4
-aaSamples      = 1
+aaSamples      = 6
 ---}
 
-res = Resolution (400, 250)
+--res = Resolution (400, 250)
+--res = Resolution (160, 100)
+res = Resolution (80, 50)
 cam = camLookingAt (F3 2.2 3.5 15) (F3 0.5 (-0.4) 0) f3e2 20
 
 mkConf stdgen = RayTraceConfig recursionDepth aaSamples stdgen res cam

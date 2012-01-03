@@ -33,7 +33,7 @@ main = do
     let branchOptim = optimizeTriangleMesh 10 branchMesh
     let leavesOptim = optimizeTriangleMesh 10 leavesMesh
     gen <- getStdGen
-    renderPPM outfile (mkScene branchOptim leavesOptim) $ mkConf gen
+    renderPPM 100 outfile (mkScene branchOptim leavesOptim) $ mkConf gen
     --renderSDL PerLine (mkScene branchOptim leavesOptim) $ mkConf gen
 
 

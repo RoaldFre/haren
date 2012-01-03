@@ -27,7 +27,7 @@ outfile = "materials.ppm"
 
 main = do
     gen <- getStdGen
-    --renderPPM outfile scene $ mkConf gen
+    --renderPPM 100 outfile scene $ mkConf gen
     renderSDL PerLine scene $ mkConf gen
 
 matAmbient  = mkAmbient (0.8 *. white)

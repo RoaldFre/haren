@@ -32,7 +32,7 @@ outfile = "dielectric.ppm"
 main = do
     setCurrentDirectory dir
     gen <- getStdGen
-    renderPPM outfile scene $ mkConf gen
+    renderPPM 100 outfile scene $ mkConf gen
     --renderSDL PerLine scene $ mkConf gen
 
 greenGlass = mkDielectric 1.5 (1, 0.2, 1)
