@@ -16,12 +16,17 @@ renderPPM chunksize fileName scene conf =
         res = run scene conf getResolution -- bit of a hack here ...
 
 chunkParallel :: (Renderer c m) => Int -> [m String] -> m String
-chunkParallel chunksize !actions = result
+chunkParallel chunksize actions = result
     where
-        chunked = splitEvery chunksize actions -- [[m Str]]
+        chunked = chunk chunksize actions      -- [[m Str]]
         batches = map (mapM id) chunked        -- [m [Str]]
         renderedBatches = renderPar batches    -- m [[Str]]
         result = fmap (concat . concat) renderedBatches -- m Str
+
+chunk :: Int -> [a] -> [[a]]
+chunk _ [] = []
+chunk n xs = as : chunk n bs where (as,bs) = splitAt n xs
+
 
 renderPPMstr :: (Renderer c m) => Resolution -> [m String]
 renderPPMstr res@(Resolution (_,ny)) =
@@ -44,12 +49,5 @@ colorToPPM :: Color -> String
 colorToPPM (Color r g b) = component r ++ " " ++ component g ++ " " ++ component b ++ " "
     where component = show . (round :: Flt -> Int) . (* 255) . min 1 . max 0
 
-
--- From http://www.haskell.org/haskellwiki/Data.List.Split
--- TODO read up on build/foldr/fusion and use it!
-splitEvery :: Int -> [e] -> [[e]]
-splitEvery i list = map (take i) (build (splitter list)) where
-    splitter [] _ n = n
-    splitter l c n  = l `c` splitter (drop i l) c n
 
 -- vim: expandtab smarttab sw=4 ts=4

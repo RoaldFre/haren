@@ -76,11 +76,15 @@ instance Renderer RayTraceConfig RayTracer where
 evaluate :: RayTracer a -> RayTraceState -> a
 evaluate (RT action) state = evalState action state
 
--- | Fully evaluates the list in parallel.
+-- | Fully evaluates the list in parallel. Works with lazy lists in 
+-- constant space.
 parallizeList :: (NFData a) => [RayTracer a] -> RayTracer [a]
 parallizeList xs = do
     states <- forkStates
-    return $ parMap rdeepseq (\(x, s) -> evaluate x s) $ zip xs states
+    let evaluationMapped = map (\(x, s) -> evaluate x s) $ zip xs states
+    return (evaluationMapped `using` parBuffer 8 rdeepseq)
+    -- TODO sane default for ------------------^  ? 
+    -- or ask it as a parameter?    ('supports up to 8 threads now')
 
 
 getState     = RT $ get
@@ -221,9 +225,10 @@ cameraRay (Resolution (nx, ny)) cam (F2 i j) =
 
 
 
-
---colorRays = colorRaysSerial
-colorRays = colorRaysPar
+-- Better to have the parallelizm at the level of (bunches of) pixels, not 
+-- this low (too small a job for the threads to alleviate the overhead)
+colorRays = colorRaysSerial
+--colorRays = colorRaysPar
 
 -- | Return the combined color from the rays, divided by the given factor. 
 -- Contributions from individiual rays are calculated in parallel when 
