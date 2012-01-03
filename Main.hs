@@ -31,16 +31,13 @@ main = do
     --renderPPM outfile scene $ mkConf gen
     renderSDL PerLine scene $ mkConf gen
 
-res = Resolution (400, 250)
-cam = camLookingAt (F3 2.2 3.5 15) (F3 0.5 (-0.4) 0) f3e2 20
-
 matAmbient  = mkAmbient (0.8 *. white)
 matDiffuse  = mkDiffuse
 matPhong    = mkPhong 35
 matRefl     = mkReflecting
 matGlossy   = mkGlossy 0.08 nGlossy
 matDielectr = mkDielectric 1.5 (0.1, 0.1, 0.1)
-matTexture  = mkTexture $ checkers (0.2 *. blue) (1.0 *. white) 200 1000
+matTexture  = mkTexture mkDiffuse $ checkers (0.2 *. blue) (1.0 *. white) 200 1000
 
 planeMat = matTexture
 planeGeom = MkAnyGeom $ mkPlane (F3 (-100) 0 (100)) (F3 200 0 0) (F3 0 0 (-1000)) f3e2
@@ -79,6 +76,9 @@ nGlossy        = 1
 recursionDepth = 4
 aaSamples      = 1
 ---}
+
+res = Resolution (400, 250)
+cam = camLookingAt (F3 2.2 3.5 15) (F3 0.5 (-0.4) 0) f3e2 20
 
 mkConf stdgen = RayTraceConfig recursionDepth aaSamples stdgen res cam
 
