@@ -223,6 +223,14 @@ colorRay ray = do
         Nothing  -> return black
         Just int -> color int
 
+-- | Compute the color of the given ray, after transforming its normal color with the given function.
+transformColorRay :: (ObjIntersection -> Color -> Color) -> Ray -> RayTracer Color
+transformColorRay weightFunction ray = do
+    scene <- getScene
+    case (intersectFirst scene ray) of
+        Nothing  -> return black
+        Just int -> weightFunction int <$> color int
+
 -- | Calculate the Color of the given ObjIntersection
 color :: ObjIntersection -> RayTracer Color
 color int = do

@@ -15,16 +15,22 @@ mkDielectric n attenuation = MkAnyMat $ Dielectric n attenuation
 
 instance Material Dielectric where
     colorMaterial int (Dielectric n (ar, ag, ab)) _ = do
-        reflCol <- black `orRecurseOn` colorRay reflectedRay
         if intDir int .*. intNorm int < 0
-        then do -- Entering the object
-            -- We always have a refracted ray entering the object.
-            refrCol <- colorRay (fromJust refractedRay)
-            return $ r *. reflCol  .+.  (1 - r) *. refrCol
-        else -- Exiting the object
+        then do 
+            -- Entering the object
+            --  always have a refracted ray entering the object (attenuate).
+            --  reflected ray goes away from the object (no attenuation).
+            refrCol <- transformColorRay attenuate $ fromJust refractedRay
+            reflCol <- black `orRecurseOn` colorRay reflectedRay
+            return $ combine reflCol refrCol
+        else do
+            -- Exiting the object:
+            --  reflected ray stays within the object (attenuate)
+            --  if no total internal refl: refracted ray leaves obj (no attenuation)
+            reflCol <- black `orRecurseOn` transformColorRay attenuate reflectedRay
             case refractedRay of
                 Just refrRay -> colorRay refrRay >>= (\refrCol ->
-                                return (r *. reflCol  .+.  (1 - r) *. (attenuation .***. refrCol)))
+                                return $ combine reflCol refrCol)
                 Nothing      -> return reflCol -- total internal reflection
      where
         nfactor = if (intDir int .*. intNorm int < 0)
@@ -39,7 +45,9 @@ instance Material Dielectric where
         r0 = ((n - 1) / (n + 1))^2 -- reflectance at normal incidence 
                                    -- (invar under n <-> 1/n)
         r = r0 + (1 - r0) * (1 - c)^5 -- Schlick's approx. to Fresnel's eq.
-        attenuation = tupleFromList $ map (\a -> exp(-a * (intDist int))) $ [ar, ag, ab]
+        combine reflCol refrCol = r *. reflCol  .+.  (1 - r) *. refrCol
+        attenuate i col = col .***. 
+                (tupleFromList $ map (\a -> exp(-a * (intDist i))) $ [ar,ag,ab])
 
 -- | n is the ratio of the indices of refraction of the material being 
 -- exited (as determined by the direction vector) to the index of 
