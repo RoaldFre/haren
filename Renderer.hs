@@ -18,10 +18,13 @@ import Math
 
 import Data.Ix
 
+import Control.DeepSeq
+
 class (Monad m, Functor m) => Renderer c m | m -> c, c -> m where
     colorPixel :: Pixel -> m Color
     getResolution :: m Resolution
     run :: Scene -> c -> m a -> a -- ^ scene -> config -> computation -> result
+    renderPar :: (NFData a) => [m a] -> m [a] -- ^ Fully evaluate the list in parallel.
 
 newtype Pixel = Pixel (Int, Int) deriving (Show, Ord, Eq, Ix)
 

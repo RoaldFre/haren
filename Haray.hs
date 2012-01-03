@@ -71,9 +71,17 @@ instance Renderer RayTraceConfig RayTracer where
     colorPixel = rayTrace
     getResolution = getRes
     run scene conf action = evaluate action $ mkInitialState scene conf
+    renderPar = parallizeList
 
 evaluate :: RayTracer a -> RayTraceState -> a
 evaluate (RT action) state = evalState action state
+
+-- | Fully evaluates the list in parallel.
+parallizeList :: (NFData a) => [RayTracer a] -> RayTracer [a]
+parallizeList xs = do
+    states <- forkStates
+    return $ parMap rdeepseq (\(x, s) -> evaluate x s) $ zip xs states
+
 
 getState     = RT $ get
 getRes       = RT $ gets stateRes
@@ -86,6 +94,8 @@ getCam       = RT $ gets stateCam
 resetDepth   = RT $ gets stateMaxDepth >>= \d -> modify (\s -> s {stateDepth = d})
 getRndGen    = RT $ gets stateRndGen
 setRndGen new = RT $ modify (\s -> s {stateRndGen = new})
+
+
 
 -- | Return an infinite list of raytracer states that are a copy of the 
 -- current one, but each one has a new random generator seed
@@ -209,15 +219,35 @@ cameraRay (Resolution (nx, ny)) cam (F2 i j) =
         dir = normalize $ us*.u .+. vs*.v .-. w -- ws = -n = -1
 
 
+
+
+
+--colorRays = colorRaysSerial
+colorRays = colorRaysPar
+
 -- | Return the combined color from the rays, divided by the given factor. 
 -- Contributions from individiual rays are calculated in parallel when 
 -- possible.
-colorRays :: Int -> [Ray] -> RayTracer Color
-colorRays n rays = do
+colorRaysPar :: Int -> [Ray] -> RayTracer Color
+colorRaysPar n rays = do
     states <- forkStates
+    --let contributions = parMap rdeepseq (\(r, s) -> evaluate (colorRay r) s) $ zip rays states
     let contributions = parMap rdeepseq (\(r, s) -> evaluate (colorRay r) s) $ zip rays states
+    {-
+    --equivalently:
+    let colorActions = map colorray rays
+    let contributions = parallizeList colorActions
+    -}
     let combined = foldl (.+.) black contributions -- not foldl': would kill sparks!
     return $ combined ./. ((fromIntegral n)::Flt)
+
+
+colorRaysSerial :: Int -> [Ray] -> RayTracer Color
+colorRaysSerial n rays = do
+    colors <- mapM colorRay rays
+    let combined = foldl' (.+.) black colors
+    return $ combined ./. ((fromIntegral n)::Flt)
+
 
 -- | Compute the color of the given ray.
 colorRay :: Ray -> RayTracer Color

@@ -1,24 +1,27 @@
+{-# LANGUAGE BangPatterns #-}
 module OutputPPM (renderPPM) where
 
 import Renderer
 import Math
 
 import Control.Applicative
-import Control.Parallel.Strategies
+import Control.Monad
 import GHC.Exts
 
 renderPPM :: (Renderer c m) => Int -> FilePath -> Scene -> c -> IO ()
 renderPPM chunksize fileName scene conf =
-    writeFile fileName $ runParallel chunksize scene conf $ renderPPMstr res
+    writeFile fileName $ run scene conf stringAction
     where
-        res = run scene conf getResolution
+        stringAction = chunkParallel chunksize (renderPPMstr res)
+        res = run scene conf getResolution -- bit of a hack here ...
 
-runParallel :: (Renderer c m) => Int -> Scene -> c -> [m String] -> String
-runParallel chunksize scene conf renderPPMstr = concat $ concat renderedBatches
+chunkParallel :: (Renderer c m) => Int -> [m String] -> m String
+chunkParallel chunksize !actions = result
     where
-        batches = splitEvery chunksize renderPPMstr -- [[m Str]]
-        batchJobs = map (mapM id) batches -- [m [Str]]
-        renderedBatches = parMap rdeepseq (run scene conf) batchJobs -- [[Str]]
+        chunked = splitEvery chunksize actions -- [[m Str]]
+        batches = map (mapM id) chunked        -- [m [Str]]
+        renderedBatches = renderPar batches    -- m [[Str]]
+        result = fmap (concat . concat) renderedBatches -- m Str
 
 renderPPMstr :: (Renderer c m) => Resolution -> [m String]
 renderPPMstr res@(Resolution (_,ny)) =
@@ -26,7 +29,6 @@ renderPPMstr res@(Resolution (_,ny)) =
     where
         rowsLists = map (renderRow res) [0 .. ny-1]
         rows = foldr (\a b -> a ++ [return "\n"] ++ b) [] rowsLists
-        --rows = foldr (++) [] rowsLists
 
 -- A list of strings where each string is the color of a single pixel
 renderRow :: (Renderer c m) => Resolution -> Int -> [m String]
@@ -46,7 +48,7 @@ colorToPPM (Color r g b) = component r ++ " " ++ component g ++ " " ++ component
 -- From http://www.haskell.org/haskellwiki/Data.List.Split
 -- TODO read up on build/foldr/fusion and use it!
 splitEvery :: Int -> [e] -> [[e]]
-splitEvery i l = map (take i) (build (splitter l)) where
+splitEvery i list = map (take i) (build (splitter list)) where
     splitter [] _ n = n
     splitter l c n  = l `c` splitter (drop i l) c n
 
