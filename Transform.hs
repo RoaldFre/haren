@@ -4,6 +4,8 @@ module Transform (
     Transformation(..),
     TransformationGraph,
     flattenTransfoGraph,
+    Transformed,
+    mkTransformed,
     module Graph,
 ) where
 
@@ -46,6 +48,10 @@ instance (Ord a) => Ord (Transformed a) where
 -- Prerequisite for Ord...
 instance (Eq a) => Eq (Transformed a) where
     t1 == t2  =  (tOriginal t1) == (tOriginal t2)
+
+mkTransformed :: Transformation -> a -> Transformed a
+mkTransformed transfo = Transformed trans invtrans
+    where (trans, invtrans) = transfoM4s transfo
 
 
 -- Boxable
