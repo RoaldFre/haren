@@ -12,6 +12,8 @@ import Boxes
 -- Plane origin direction1 direction2 normals
 data Plane = Plane Pt3 Vec3 Vec3 [UVec3] deriving Show
 
+-- TODO returun AnyGeom from mkPlane, not a bare Plane!
+
 -- | Single sided plane
 mkPlane :: Pt3 -> Vec3 -> Vec3 -> Vec3 -> Plane
 mkPlane origin dir1 dir2 normalDir = Plane origin dir1 dir2 [normal]

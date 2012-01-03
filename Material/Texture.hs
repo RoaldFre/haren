@@ -15,7 +15,7 @@ data Texture = Texture Tex AnyMat deriving Show
 mkTexture :: AnyMat -> Tex -> AnyMat
 mkTexture baseMaterial texture = MkAnyMat $ Texture texture baseMaterial
 
-type Tex = (Pt2 -> Color) -- ^ function of (u,v) to colors, u and v in [0,1]
+type Tex = Pt2 -> Color -- ^ function of (u,v) to colors, u and v in [0,1]
 instance Show Tex where
     show _ = "<<Texture>>"
 
