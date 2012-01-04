@@ -95,6 +95,7 @@ decDepth     = getDepth >>= (\d -> RT $ modify (\s -> s {stateDepth = d - 1}))
 getAAsamples = RT $ gets stateAAsamples
 getScene     = RT $ gets stateScene
 getCam       = RT $ gets stateCam
+setDepth d   = RT $ modify (\s -> s {stateDepth = d})
 resetDepth   = RT $ gets stateMaxDepth >>= \d -> modify (\s -> s {stateDepth = d})
 getRndGen    = RT $ gets stateRndGen
 setRndGen new = RT $ modify (\s -> s {stateRndGen = new})
@@ -249,7 +250,8 @@ colorRaysPar n rays = do
 
 colorRaysSerial :: Int -> [Ray] -> RayTracer Color
 colorRaysSerial n rays = do
-    colors <- mapM colorRay rays
+    depth <- getDepth -- Don't need to copy the entire state, just need to reset depth
+    colors <- mapM (\r -> do col <- colorRay r; setDepth depth; return col) rays -- TODO inverse >> as in "colray >> setdpth" but keep 1st result
     let combined = foldl' (.+.) black colors
     return $ combined ./. ((fromIntegral n)::Flt)
 
