@@ -28,10 +28,13 @@ instance Add Color where (.+.) = addt
 instance Sub Color where (.-.) = subt
 instance NFData Color where rnf = rnfTuple
 
-black = Color 0 0 0
-white = Color 1 1 1
-red   = Color 1 0 0
-green = Color 0 1 0
-blue  = Color 0 0 1
+black   = Color 0 0 0
+white   = Color 1 1 1
+red     = Color 1 0 0
+green   = Color 0 1 0
+blue    = Color 0 0 1
+cyan    = Color 0 1 1
+yellow  = Color 1 1 0
+magenta = Color 1 0 1
 
 -- vim: expandtab smarttab sw=4 ts=4
