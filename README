@@ -11,5 +11,7 @@ It consists of two main parts:
   - Haray (pronounced 'hurray'):
     A Haskell Raytracer
 
+See the 'examples' directory for some pretty pictures!
+
 The latest version can be found at http://github.com/RoaldFre/haren
 
